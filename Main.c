@@ -31,9 +31,33 @@ typedef struct {
 } Interpreter;
 
 // Interpreter functions
-void assign(char *var_name, char *value, Interpreter *interpreter) {
-  // Do something with assigned value (for demonstration, print)
-  printf("Assigned %s = %s\n", var_name, value);
+void assign(char *x, char *y, Interpreter *interpreter) {
+    
+    char userInput[100];
+
+    // Read input from the user
+    printf("Enter your input: ");
+    fgets(userInput, sizeof(userInput), stdin);
+    
+    // Remove trailing newline character
+    if (userInput[strlen(userInput) - 1] == '\n') {
+        userInput[strlen(userInput) - 1] = '\0';
+    }
+    // Attempt to convert input to an integer
+    int number;
+    y = userInput;
+
+    if (sscanf(userInput, "%d", &number) == 1) {
+        // Input is an integer
+        printf("You entered an integer: %d\n", number);
+    } else {
+        // Input is a string
+        // y = userInput;
+        printf("You entered a string: %s\n", y);
+    }
+    
+    printf("Assigned %s = %s\n", x, y);
+
 }
 
 void print_from_to(int start, int end) {
