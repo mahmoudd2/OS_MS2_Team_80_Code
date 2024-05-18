@@ -182,7 +182,7 @@ void free_program_lines(char **program, int num_lines) {
   }
 }
 
-void execute_line(char *line, Interpreter *interpreter) {
+void execute_line(char *line, Interpreter *interpreter,Memory *memory) {
   if (line == NULL) {
     // Handle null pointer error
     fprintf(stderr, "Error: Null pointer encountered\n");
@@ -219,60 +219,72 @@ void execute_line(char *line, Interpreter *interpreter) {
             }
         }
     }
-    else if (strcmp(token, "printFromTo") == 0) {
+    else if (strcmp(token, "printFromTo") == 0) 
+    {
         // Handle printFromTo command
         char *start_str = strtok(NULL, " ");
         char *end_str = strtok(NULL, " ");
+
         if (start_str != NULL && end_str != NULL) {
             int start = atoi(start_str);
             int end = atoi(end_str);
-            print_from_to(start, end);
+            printf("start: %d End: %d\n", start, end);
+            print_from_to(start, end, memory);
         } else {
             fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
         }
     }
 }
 
-void execute_program(char **program, int num_lines, Interpreter *interpreter) {
+void execute_program(char **program, int num_lines, Interpreter *interpreter,Memory *memory) {
     for (int i = 0; i < num_lines; i++) {
-        execute_line(program[i], interpreter);
+        execute_line(program[i], interpreter,memory);
     }
 }
 
 void assign(char *x, char *y, Interpreter *interpreter) {
-    
-    char userInput[100];
-
     // Read input from the user
     printf("Enter your input: ");
-    fgets(userInput, sizeof(userInput), stdin);
+    fgets(y, sizeof(y), stdin);
     
     // Remove trailing newline character
-    if (userInput[strlen(userInput) - 1] == '\n') {
-        userInput[strlen(userInput) - 1] = '\0';
-    }
-    // Attempt to convert input to an integer
-    int number;
-    y = userInput;
-
-    if (sscanf(userInput, "%d", &number) == 1) {
-        // Input is an integer
-        printf("You entered an integer: %d\n", number);
-    } else {
-        // Input is a string
-        // y = userInput;
-        printf("You entered a string: %s\n", y);
+    if (y[strlen(y) - 1] == '\n') {
+        y[strlen(y) - 1] = '\0';
     }
     
     printf("Assigned %s = %s\n", x, y);
 
+    // Store the assigned value in memory
+    Memory *memory = create_memory(); // Create a memory object (you may need to pass this to the function)
+    for (int i = 0; i < 60; i++) {
+        if (memory->Mem[i].type == VARIABLE && strcmp(memory->Mem[i].data.variable.var_name, x) == 0) {
+            // Variable already exists in memory, update its value
+            strcpy(memory->Mem[i].data.variable.value, y);
+            return; // Exit the function
+        }
+    }
+    // If the variable doesn't exist in memory, find the first available slot and store it
+    for (int i = 0; i < 60; i++) {
+        if (memory->Mem[i].type == INSTRUCTION) {
+            memory->Mem[i].type = VARIABLE;
+            strcpy(memory->Mem[i].data.variable.var_name, x);
+            strcpy(memory->Mem[i].data.variable.value, y);
+            return; // Exit the function
+        }
+    }
+    printf("Memory is full, cannot store %s = %s\n", x, y);
 }
 
-void print_from_to(int start, int end) {
-  for (int num = start; num <= end; num++) {
-    printf("%d ", num);
-  }
-  printf("\n");
+
+void print_from_to(int start, int end, Memory *memory) {
+    for (int num = start; num <= end; num++) {
+        if (memory->Mem[num].type == VARIABLE) {
+            printf("%s = %s\n", memory->Mem[num].data.variable.var_name, memory->Mem[num].data.variable.value);
+        } else {
+            printf("%d ", num);
+        }
+    }
+    printf("\n");
 }
 
 void writeFile(Interpreter *interpreter, const char *filename, const char *data) {
@@ -344,7 +356,7 @@ int main() {
     mutex_init(&interpreter.user_output_mutex);
 
     // Execute program 1
-    execute_program(program1, num_lines_program1, &interpreter);
+    execute_program(program1, num_lines_program1, &interpreter, memory);
 
     // Execute program 2
     // execute_program(program2, num_lines_program2, &interpreter);
