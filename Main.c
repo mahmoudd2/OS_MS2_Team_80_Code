@@ -1,178 +1,235 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h> // Include pthread library for mutex
 
-#define MAX_LINES 1000
-#define MAX_LINE_LENGTH 1000
+#define MEMORY_SIZE 60
+#define MAX_PROCESSES 10
+#define MAX_LEVELS 4
+#define MAX_LINE_LENGTH 100
+#define MAX_PROGRAM_LINES 20
 
-// Define Mutex structure
-typedef struct {
-  pthread_mutex_t mutex;
-} Mutex;
+// Define Process States
+typedef enum
+{
+  NEW,
+  READY,
+  RUNNING,
+  WAITING,
+  TERMINATED
+} ProcessState;
 
-// Mutex functions
-void mutex_init(Mutex *mutex) {
-  pthread_mutex_init(&mutex->mutex, NULL);
-}
+// Define PCB structure
+typedef struct
+{
+  int pid;
+  ProcessState state;
+  int priority;
+  int program_counter;
+  int memory_lower_bound;
+  int memory_upper_bound;
+  char *instructions[MAX_PROGRAM_LINES];
+  int instruction_count;
+} PCB;
 
-void mutex_lock(Mutex *mutex) {
-  pthread_mutex_lock(&mutex->mutex);
-}
+// Memory structure
+typedef struct
+{
+  char *data[MEMORY_SIZE];
+} Memory;
 
-void mutex_unlock(Mutex *mutex) {
-  pthread_mutex_unlock(&mutex->mutex);
-}
+// Process Manager structure
+typedef struct
+{
+  PCB pcb_list[MAX_PROCESSES];
+  int process_count;
+  int next_pid;
+  Memory memory;
+} ProcessManager;
 
-// Define Interpreter structure
-typedef struct {
-  Mutex user_input_mutex;
-  Mutex user_output_mutex;
-} Interpreter;
+void initialize_process_manager(ProcessManager *pm)
+{
+  pm->process_count = 0;
+  pm->next_pid = 1; // Start PID from 1
 
-// Interpreter functions
-void assign(char *x, char *y, Interpreter *interpreter) {
-    
-    char userInput[100];
-
-    // Read input from the user
-    printf("Enter your input: ");
-    fgets(userInput, sizeof(userInput), stdin);
-    
-    // Remove trailing newline character
-    if (userInput[strlen(userInput) - 1] == '\n') {
-        userInput[strlen(userInput) - 1] = '\0';
-    }
-    // Attempt to convert input to an integer
-    int number;
-    y = userInput;
-
-    if (sscanf(userInput, "%d", &number) == 1) {
-        // Input is an integer
-        printf("You entered an integer: %d\n", number);
-    } else {
-        // Input is a string
-        // y = userInput;
-        printf("You entered a string: %s\n", y);
-    }
-    
-    printf("Assigned %s = %s\n", x, y);
-
-}
-
-void print_from_to(int start, int end) {
-  for (int num = start; num <= end; num++) {
-    printf("%d ", num);
+  for (int i = 0; i < MEMORY_SIZE; i++)
+  {
+    pm->memory.data[i] = NULL;
   }
-  printf("\n");
+
+  for (int i = 0; i < MAX_PROCESSES; i++)
+  {
+    pm->pcb_list[i].pid = -1; // Indicates unused PCB slot
+  }
 }
 
-char *read_file(char *filename, Interpreter *interpreter) {
-  // Simulate reading file contents (replace with actual file I/O)
-  mutex_lock(&interpreter->user_output_mutex);
-  printf("** Simulating file read (replace with actual file access) **\n");
-  mutex_unlock(&interpreter->user_output_mutex);
-  return "This is content from the file"; // Replace with actual file reading logic
-}
+int create_process(ProcessManager *pm, const char *file_path)
+{
+  if (pm->process_count >= MAX_PROCESSES)
+  {
+    printf("Error: Maximum number of processes reached.\n");
+    return -1;
+  }
 
-int read_program_file(const char *file_path, char **program) {
+  // Allocate memory for the process
+  int memory_start = -1;
+  for (int i = 0; i <= MEMORY_SIZE - MAX_PROGRAM_LINES; i++)
+  {
+    int free = 1;
+    for (int j = 0; j < MAX_PROGRAM_LINES; j++)
+    {
+      if (pm->memory.data[i + j] != NULL)
+      {
+        free = 0;
+        break;
+      }
+    }
+    if (free)
+    {
+      memory_start = i;
+      break;
+    }
+  }
+
+  if (memory_start == -1)
+  {
+    printf("Error: Not enough memory to create process.\n");
+    return -1;
+  }
+
+  // Initialize PCB
+  PCB *pcb = &pm->pcb_list[pm->process_count];
+  pcb->pid = pm->next_pid++;
+  pcb->state = NEW;
+  pcb->priority = 1; // Default priority
+  pcb->program_counter = 0;
+  pcb->memory_lower_bound = memory_start;
+  pcb->memory_upper_bound = memory_start + MAX_PROGRAM_LINES - 1;
+  pcb->instruction_count = 0;
+
+  // Read program file
   FILE *file = fopen(file_path, "r");
-  if (file == NULL) {
-    fprintf(stderr, "Error: Unable to open file %s\n", file_path);
-    return -1; // Return -1 to indicate failure
+  if (file == NULL)
+  {
+    printf("Error: Unable to open file %s\n", file_path);
+    return -1;
   }
 
-  int num_lines = 0;
   char line[MAX_LINE_LENGTH];
+  while (fgets(line, sizeof(line), file) != NULL)
+  {
+    // Remove newline character
+    line[strcspn(line, "\n")] = '\0';
 
-  // Read lines from file and store them in program array
-  while (fgets(line, MAX_LINE_LENGTH, file) != NULL && num_lines < MAX_LINES) {
-    // Remove newline character if present
-    if (line[strlen(line) - 1] == '\n') {
-      line[strlen(line) - 1] = '\0';
+    // Store instruction in PCB
+    pcb->instructions[pcb->instruction_count] = strdup(line);
+    pcb->instruction_count++;
+
+    if (pcb->instruction_count > MAX_PROGRAM_LINES)
+    {
+      printf("Error: Program exceeds maximum number of lines.\n");
+      fclose(file);
+      return -1;
     }
-    // Allocate memory for line and copy it to program array
-    program[num_lines] = strdup(line);
-    num_lines++;
   }
-
   fclose(file);
-  return num_lines; // Return number of lines read
+
+  // Mark memory as allocated
+  for (int i = memory_start; i < memory_start + pcb->instruction_count; i++)
+  {
+    pm->memory.data[i] = "ALLOCATED"; // Placeholder for actual data
+  }
+
+  pm->process_count++;
+  return pcb->pid;
 }
 
-void free_program_lines(char **program, int num_lines) {
-  // Free memory allocated for program lines
-  for (int i = 0; i < num_lines; i++) {
-    free(program[i]);
+void execute_instruction(PCB *pcb)
+{
+  if (pcb->program_counter < pcb->instruction_count)
+  {
+    printf("Executing instruction for process %d: %s\n", pcb->pid, pcb->instructions[pcb->program_counter]);
+    // Here you would parse and execute the instruction
+    // For this example, we'll just print the instruction
+
+    pcb->program_counter++;
+  }
+  else
+  {
+    pcb->state = TERMINATED;
+    printf("Process %d terminated\n", pcb->pid);
   }
 }
 
-void execute_line(char *line, Interpreter *interpreter) {
-  if (line == NULL) {
-    // Handle null pointer error
-    fprintf(stderr, "Error: Null pointer encountered\n");
-    return;
-  }
+void schedule_processes(ProcessManager *pm)
+{
+  // Define the quantum for each level
+  int quantum[MAX_LEVELS] = {1, 2, 4, 8};
+  // Initialize the queues
+  PCB *ready_queues[MAX_LEVELS][MAX_PROCESSES];
+  int queue_counts[MAX_LEVELS] = {0};
 
-  char *token = strtok(line, " ");
-  if (token == NULL) {
-    // Handle error if no token found
-    fprintf(stderr, "Error: No token found in line\n");
-    return;
-  }
-
-  if (strcmp(token, "assign") == 0) {
-    // Handle assign command
-    char *var_name = strtok(NULL, " ");
-    char *value = strtok(NULL, " ");
-    if (var_name != NULL && value != NULL) {
-      assign(var_name, value, interpreter);
-    } else {
-      fprintf(stderr, "Error: Insufficient arguments for assign command\n");
+  // Populate the ready queues based on process states
+  for (int i = 0; i < pm->process_count; i++)
+  {
+    PCB *pcb = &pm->pcb_list[i];
+    if (pcb->state == NEW || pcb->state == READY)
+    {
+      pcb->state = READY;
+      ready_queues[pcb->priority][queue_counts[pcb->priority]++] = pcb;
     }
-  } else if (strcmp(token, "mutexLock") == 0) {
-        // Handle mutexLock command
-        char *resource = strtok(NULL, " ");
-        if (resource != NULL) {
-            if (strcmp(resource, "userInput") == 0) {
-                mutex_lock(&interpreter->user_input_mutex);
-            }
+  }
+
+  // Schedule processes from the highest priority queue to the lowest
+  for (int level = 0; level < MAX_LEVELS; level++)
+  {
+    for (int i = 0; i < queue_counts[level]; i++)
+    {
+      PCB *pcb = ready_queues[level][i];
+      if (pcb->state == READY)
+      {
+        pcb->state = RUNNING;
+        printf("Running process %d at priority level %d\n", pcb->pid, pcb->priority);
+
+        // Simulate execution for the time quantum of this level
+        for (int j = 0; j < quantum[level]; j++)
+        {
+          execute_instruction(pcb);
+          if (pcb->state == TERMINATED)
+          {
+            break;
+          }
         }
+
+        if (pcb->state != TERMINATED)
+        {
+          // If process is not terminated, move to appropriate queue
+          if (level < MAX_LEVELS - 1)
+          {
+            pcb->priority++; // Demote to lower priority
+          }
+          pcb->state = READY; // Set state back to READY
+        }
+      }
     }
+  }
 }
-void execute_program(char **program, int num_lines, Interpreter *interpreter) {
-    for (int i = 0; i < num_lines; i++) {
-        execute_line(program[i], interpreter);
-    }
-}
-int main() {
-    // File paths for program files
-    char *program1_path = "program1.txt";
-    char *program2_path = "program2.txt";
-    char *program3_path = "program3.txt";
 
-    // Read program files
-    char *program1[MAX_LINES];
-    char *program2[MAX_LINES];
-    char *program3[MAX_LINES];
-    
-    int num_lines_program1 = read_program_file(program1_path, program1);
-    int num_lines_program2 = read_program_file(program2_path, program2);
-    int num_lines_program3 = read_program_file(program3_path, program3);
+int main()
+{
+  ProcessManager pm;
+  initialize_process_manager(&pm);
 
-    // Initialize interpreter
-    Interpreter interpreter;
-    mutex_init(&interpreter.user_input_mutex);
-    mutex_init(&interpreter.user_output_mutex);
+  // Example programs with their sizes
+  create_process(&pm, "program1.txt");
+  create_process(&pm, "program2.txt");
+  create_process(&pm, "program3.txt");
 
-    // Execute program 1
-    execute_program(program1, num_lines_program1, &interpreter);
+  // Schedule processes
+  for (int cycle = 0; cycle < 10; cycle++)
+  {
+    printf("Cycle %d\n", cycle);
+    schedule_processes(&pm);
+  }
 
-    // Execute program 2
-    execute_program(program2, num_lines_program2, &interpreter);
-
-    // Execute program 3
-    execute_program(program3, num_lines_program3, &interpreter);
-
-    return 0;
+  return 0;
 }
