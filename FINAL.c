@@ -256,6 +256,37 @@ void print_from_to(int start, int end) {
   printf("\n");
 }
 
+void writeFile(Interpreter *interpreter, const char *filename, const char *data) {
+    mutex_lock(&interpreter->file_mutex);
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Unable to create file %s\n", filename);
+        mutex_unlock(&interpreter->file_mutex);
+        return;
+    }
+    fprintf(file, "%s", data);
+    fclose(file);
+    printf("Data written to file %s: %s\n", filename, data);
+    mutex_unlock(&interpreter->file_mutex);
+}
+
+void readFile(Interpreter *interpreter, const char *filename) {
+    mutex_lock(&interpreter->file_mutex);
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Unable to open file %s\n", filename);
+        mutex_unlock(&interpreter->file_mutex);
+        return;
+    }
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        printf("%s", line);
+    }
+    fclose(file);
+    printf("Data read from file %s\n", filename);
+    mutex_unlock(&interpreter->file_mutex);
+}
+
 int main() {
     Memory *memory = create_memory();
     int lower_bound, upper_bound;
