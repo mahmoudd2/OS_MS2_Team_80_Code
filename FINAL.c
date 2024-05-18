@@ -27,7 +27,8 @@ void mutex_unlock(Mutex *mutex) {
 // Define Interpreter structure
 typedef struct {
   Mutex user_input_mutex;
-  Mutex user_output_mutex;
+  Mutex user_output_mutex; 
+  Mutex file_mutex
 } Interpreter;
 
 typedef enum
@@ -68,6 +69,7 @@ typedef struct
         PCB pcb;
     } data;
 }MemoryWord;
+
 
 typedef struct
 {
@@ -194,22 +196,39 @@ void execute_line(char *line, Interpreter *interpreter) {
     return;
   }
 
-  if (strcmp(token, "assign") == 0) {
-    // Handle assign command
-    char *var_name = strtok(NULL, " ");
-    char *value = strtok(NULL, " ");
-    if (var_name != NULL && value != NULL) {
-      assign(var_name, value, interpreter);
-    } else {
-      fprintf(stderr, "Error: Insufficient arguments for assign command\n");
-    }
-  } else if (strcmp(token, "mutexLock") == 0) {
+  if (strcmp(token, "assign") == 0) 
+    {
+            // Handle assign command
+            char *var_name = strtok(NULL, " ");
+            char *value = strtok(NULL, " ");
+            if (var_name != NULL && value != NULL) {
+            assign(var_name, value, interpreter);
+        } 
+        else 
+        {
+            fprintf(stderr, "Error: Insufficient arguments for assign command\n");
+        }
+    } 
+    else if (strcmp(token, "mutexLock") == 0) 
+    {
         // Handle mutexLock command
         char *resource = strtok(NULL, " ");
         if (resource != NULL) {
             if (strcmp(resource, "userInput") == 0) {
                 mutex_lock(&interpreter->user_input_mutex);
             }
+        }
+    }
+    else if (strcmp(token, "printFromTo") == 0) {
+        // Handle printFromTo command
+        char *start_str = strtok(NULL, " ");
+        char *end_str = strtok(NULL, " ");
+        if (start_str != NULL && end_str != NULL) {
+            int start = atoi(start_str);
+            int end = atoi(end_str);
+            print_from_to(start, end);
+        } else {
+            fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
         }
     }
 }
@@ -256,6 +275,37 @@ void print_from_to(int start, int end) {
   printf("\n");
 }
 
+void writeFile(Interpreter *interpreter, const char *filename, const char *data) {
+    mutex_lock(&interpreter->file_mutex);
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Unable to create file %s\n", filename);
+        mutex_unlock(&interpreter->file_mutex);
+        return;
+    }
+    fprintf(file, "%s", data);
+    fclose(file);
+    printf("Data written to file %s: %s\n", filename, data);
+    mutex_unlock(&interpreter->file_mutex);
+}
+
+void readFile(Interpreter *interpreter, const char *filename) {
+    mutex_lock(&interpreter->file_mutex);
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Unable to open file %s\n", filename);
+        mutex_unlock(&interpreter->file_mutex);
+        return;
+    }
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        printf("%s", line);
+    }
+    fclose(file);
+    printf("Data read from file %s\n", filename);
+    mutex_unlock(&interpreter->file_mutex);
+}
+
 int main() {
     Memory *memory = create_memory();
     int lower_bound, upper_bound;
@@ -275,17 +325,17 @@ int main() {
     
     
     // File paths for program files
-    // char *program1_path = "program1.txt";
+    char *program1_path = "program1.txt";
     char *program2_path = "program2.txt";
-    // char *program3_path = "program3.txt";
+    char *program3_path = "program3.txt";
 
     // Read program files
-    // char *program1[MAX_LINES];
-    char *program2[MAX_LINES];
+    char *program1[MAX_LINES];
+    // char *program2[MAX_LINES];
     // char *program3[MAX_LINES];
     
-    // int num_lines_program1 = read_program_file(program1_path, program1);
-    int num_lines_program2 = read_program_file(program2_path, program2);
+    int num_lines_program1 = read_program_file(program1_path, program1);
+    // int num_lines_program2 = read_program_file(program2_path, program2);
     // int num_lines_program3 = read_program_file(program3_path, program3);
 
     // Initialize interpreter
@@ -294,10 +344,10 @@ int main() {
     mutex_init(&interpreter.user_output_mutex);
 
     // Execute program 1
-    // execute_program(program1, num_lines_program1, &interpreter);
+    execute_program(program1, num_lines_program1, &interpreter);
 
     // Execute program 2
-    execute_program(program2, num_lines_program2, &interpreter);
+    // execute_program(program2, num_lines_program2, &interpreter);
 
     // Execute program 3
     // execute_program(program3, num_lines_program3, &interpreter);
