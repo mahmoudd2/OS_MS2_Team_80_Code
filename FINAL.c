@@ -5,6 +5,9 @@
 
 #define MAX_LINES 1000
 #define MAX_LINE_LENGTH 1000
+#define MAX_QUEUE_SIZE 100
+#define MAX_INSTRUCTIONS 8
+
 // Define Mutex structure
 typedef struct {
   pthread_mutex_t mutex;
@@ -48,6 +51,21 @@ typedef struct {
     int memory_lower_bound;
     int memory_upper_bound;
 } PCB;
+
+typedef struct {
+    PCB pcb;
+    char instructions[MAX_INSTRUCTIONS][50];
+    int instructionCount;
+} Process;
+
+typedef struct
+{
+  PCB *processes[MAX_QUEUE_SIZE];
+  int front;
+  int rear;
+  int size;
+} Queue;
+
 
 typedef enum {
     INSTRUCTION,
@@ -147,6 +165,46 @@ void store_pcb(Memory *memory, PCB *pcb) {
     }
 }
 
+// queues:
+void init_queue(Queue *q)
+{
+  q->front = 0;
+  q->rear = -1;
+  q->size = 0;
+}
+
+int is_empty(Queue *q)
+{
+  return q->size == 0;
+}
+
+int is_full(Queue *q)
+{
+  return q->size == MAX_QUEUE_SIZE;
+}
+
+void enqueue(Queue *q, PCB *pcb)
+{
+  if (!is_full(q))
+  {
+    q->rear = (q->rear + 1) % MAX_QUEUE_SIZE;
+    q->processes[q->rear] = pcb;
+    q->size++;
+  }
+}
+
+PCB *dequeue(Queue *q)
+{
+  if (!is_empty(q))
+  {
+    PCB *pcb = q->processes[q->front];
+    q->front = (q->front + 1) % MAX_QUEUE_SIZE;
+    q->size--;
+    return pcb;
+  }
+  return NULL;
+}
+
 
 
 int read_program_file(const char *file_path, char **program) {
@@ -224,6 +282,7 @@ void execute_line(char *line, Interpreter *interpreter,Memory *memory) {
         // Handle printFromTo command
         char *start_str = strtok(NULL, " ");
         char *end_str = strtok(NULL, " ");
+        printf("start: %s End: %s\n", start_str, end_str);
 
         if (start_str != NULL && end_str != NULL) {
             int start = atoi(start_str);
@@ -323,7 +382,6 @@ int main() {
     int lower_bound, upper_bound;
 
     // Example process with 10 instructions
-    int num_instructions = 10;
     if (allocate_memory(memory, 1, num_instructions, &lower_bound, &upper_bound)) {
         printf("Process 1 allocated memory from %d to %d\n", lower_bound, upper_bound);
         PCB *pcb1 = create_pcb(1, 1, lower_bound, upper_bound);
@@ -343,12 +401,12 @@ int main() {
 
     // Read program files
     char *program1[MAX_LINES];
-    // char *program2[MAX_LINES];
-    // char *program3[MAX_LINES];
+    char *program2[MAX_LINES];
+    char *program3[MAX_LINES];
     
     int num_lines_program1 = read_program_file(program1_path, program1);
-    // int num_lines_program2 = read_program_file(program2_path, program2);
-    // int num_lines_program3 = read_program_file(program3_path, program3);
+    int num_lines_program2 = read_program_file(program2_path, program2);
+    int num_lines_program3 = read_program_file(program3_path, program3);
 
     // Initialize interpreter
     Interpreter interpreter;
@@ -359,10 +417,10 @@ int main() {
     execute_program(program1, num_lines_program1, &interpreter, memory);
 
     // Execute program 2
-    // execute_program(program2, num_lines_program2, &interpreter);
+    execute_program(program2, num_lines_program2, &interpreter, memory);
 
     // Execute program 3
-    // execute_program(program3, num_lines_program3, &interpreter);
+    execute_program(program3, num_lines_program3, &interpreter, memory);
 
     return 0;
 }
