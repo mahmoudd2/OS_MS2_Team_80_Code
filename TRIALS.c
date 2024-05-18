@@ -36,7 +36,7 @@ void assign(char *x, char *y, Interpreter *interpreter) {
     char userInput[100];
 
     // Read input from the user
-    printf("Enter your input: ");
+    printf("Enter your input for var %s: ", x);
     fgets(userInput, sizeof(userInput), stdin);
     
     // Remove trailing newline character
