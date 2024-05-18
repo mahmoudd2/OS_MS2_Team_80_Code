@@ -60,6 +60,25 @@ void assign(char *x, char *y, Interpreter *interpreter) {
 
 }
 
+void writeFile( char *filename,  char *data) {
+    // Open file for writing ("w" mode)
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+         printf("Error opening file");
+        return;
+    }
+
+    // Write data to file
+    if (fputs(data, file) == EOF) {
+        printf("Error writing to file ");
+    }
+
+    // Close the file
+    if (fclose(file) != 0) {
+        printf("Error closing file ");
+    }
+}
+
 void print_from_to(int start, int end) {
   for (int num = start; num <= end; num++) {
     printf("%d ", num);
@@ -142,23 +161,24 @@ void execute_line(char *line, Interpreter *interpreter) {
 }
 void execute_program(char **program, int num_lines, Interpreter *interpreter) {
     for (int i = 0; i < num_lines; i++) {
+        // printf("Program %s\n", program[0]);
         execute_line(program[i], interpreter);
     }
 }
 int main() {
     // File paths for program files
-    char *program1_path = "program1.txt";
+    // char *program1_path = "program1.txt";
     char *program2_path = "program2.txt";
-    char *program3_path = "program3.txt";
+    // char *program3_path = "program3.txt";
 
     // Read program files
-    char *program1[MAX_LINES];
+    // char *program1[MAX_LINES];
     char *program2[MAX_LINES];
-    char *program3[MAX_LINES];
+    // char *program3[MAX_LINES];
     
-    int num_lines_program1 = read_program_file(program1_path, program1);
+    // int num_lines_program1 = read_program_file(program1_path, program1);
     int num_lines_program2 = read_program_file(program2_path, program2);
-    int num_lines_program3 = read_program_file(program3_path, program3);
+    // int num_lines_program3 = read_program_file(program3_path, program3);
 
     // Initialize interpreter
     Interpreter interpreter;
@@ -166,13 +186,13 @@ int main() {
     mutex_init(&interpreter.user_output_mutex);
 
     // Execute program 1
-    execute_program(program1, num_lines_program1, &interpreter);
+    // execute_program(program1, num_lines_program1, &interpreter);
 
     // Execute program 2
     execute_program(program2, num_lines_program2, &interpreter);
 
     // Execute program 3
-    execute_program(program3, num_lines_program3, &interpreter);
+    // execute_program(program3, num_lines_program3, &interpreter);
 
     return 0;
 }
