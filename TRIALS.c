@@ -33,50 +33,50 @@ typedef struct {
 // Interpreter functions
 void assign(char *x, char *y, Interpreter *interpreter) {
     
-    char userInput[100];
+  char userInput[100];
 
-    // Read input from the user
-    printf("Enter your input: ");
-    fgets(userInput, sizeof(userInput), stdin);
-    
-    // Remove trailing newline character
-    if (userInput[strlen(userInput) - 1] == '\n') {
-        userInput[strlen(userInput) - 1] = '\0';
-    }
-    // Attempt to convert input to an integer
-    int number;
-    y = userInput;
+  // Read input from the user
+  printf("Enter your input: ");
+  fgets(userInput, sizeof(userInput), stdin);
+  
+  // Remove trailing newline character
+  if (userInput[strlen(userInput) - 1] == '\n') {
+      userInput[strlen(userInput) - 1] = '\0';
+  }
+  // Attempt to convert input to an integer
+  int number;
+  y = userInput;
 
-    if (sscanf(userInput, "%d", &number) == 1) {
-        // Input is an integer
-        printf("You entered an integer: %d\n", number);
-    } else {
-        // Input is a string
-        // y = userInput;
-        printf("You entered a string: %s\n", y);
-    }
-    
-    printf("Assigned %s = %s\n", x, y);
+  if (sscanf(userInput, "%d", &number) == 1) {
+      // Input is an integer
+      printf("You entered an integer: %d\n", number);
+  } else {
+      // Input is a string
+      // y = userInput;
+      printf("You entered a string: %s\n", y);
+  }
+  
+  printf("Assigned %s = %s\n", x, y);
 
 }
 
 void writeFile( char *filename,  char *data) {
-    // Open file for writing ("w" mode)
-    FILE *file = fopen(filename, "w");
-    if (file == NULL) {
-         printf("Error opening file");
-        return;
-    }
+  // Open file for writing ("w" mode)
+  FILE *file = fopen(filename, "w");
+  if (file == NULL) {
+        printf("Error opening file");
+      return;
+  }
 
-    // Write data to file
-    if (fputs(data, file) == EOF) {
-        printf("Error writing to file ");
-    }
+  // Write data to file
+  if (fputs(data, file) == EOF) {
+      printf("Error writing to file ");
+  }
 
-    // Close the file
-    if (fclose(file) != 0) {
-        printf("Error closing file ");
-    }
+  // Close the file
+  if (fclose(file) != 0) {
+      printf("Error closing file ");
+  }
 }
 
 void print_from_to(int start, int end) {

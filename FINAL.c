@@ -5,6 +5,7 @@
 
 #define MAX_LINES 1000
 #define MAX_LINE_LENGTH 1000
+#define MAX_PROCESS 1000
 #define MAX_QUEUE_SIZE 100
 #define MAX_INSTRUCTIONS 8
 
@@ -57,6 +58,8 @@ typedef struct {
     char instructions[MAX_INSTRUCTIONS][50];
     int instructionCount;
 } Process;
+
+Process processes[MAX_PROCESS];
 
 typedef struct
 {
@@ -240,35 +243,30 @@ void free_program_lines(char **program, int num_lines) {
   }
 }
 
-void execute_line(char *line, Interpreter *interpreter,Memory *memory) {
-  if (line == NULL) {
-    // Handle null pointer error
-    fprintf(stderr, "Error: Null pointer encountered\n");
-    return;
-  }
+void execute_line(char *line, Interpreter *interpreter, Memory *memory) {
+    if (line == NULL) {
+        // Handle null pointer error
+        fprintf(stderr, "Error: Null pointer encountered\n");
+        return;
+    }
 
-  char *token = strtok(line, " ");
-  if (token == NULL) {
-    // Handle error if no token found
-    fprintf(stderr, "Error: No token found in line\n");
-    return;
-  }
+    char *token = strtok(line, " ");
+    if (token == NULL) {
+        // Handle error if no token found
+        fprintf(stderr, "Error: No token found in line\n");
+        return;
+    }
 
-  if (strcmp(token, "assign") == 0) 
-    {
-            // Handle assign command
-            char *var_name = strtok(NULL, " ");
-            char *value = strtok(NULL, " ");
-            if (var_name != NULL && value != NULL) {
-            assign(var_name, value, interpreter);
-        } 
-        else 
-        {
+    if (strcmp(token, "assign") == 0) {
+        // Handle assign command
+        char *var_name = strtok(NULL, " ");
+        char value[MAX_LINE_LENGTH];
+        if (var_name != NULL) {
+            assign(var_name, value, interpreter, memory);
+        } else {
             fprintf(stderr, "Error: Insufficient arguments for assign command\n");
         }
-    } 
-    else if (strcmp(token, "mutexLock") == 0) 
-    {
+    } else if (strcmp(token, "mutexLock") == 0) {
         // Handle mutexLock command
         char *resource = strtok(NULL, " ");
         if (resource != NULL) {
@@ -276,18 +274,13 @@ void execute_line(char *line, Interpreter *interpreter,Memory *memory) {
                 mutex_lock(&interpreter->user_input_mutex);
             }
         }
-    }
-    else if (strcmp(token, "printFromTo") == 0) 
-    {
+    } else if (strcmp(token, "printFromTo") == 0) {
         // Handle printFromTo command
         char *start_str = strtok(NULL, " ");
         char *end_str = strtok(NULL, " ");
-        printf("start: %s End: %s\n", start_str, end_str);
-
         if (start_str != NULL && end_str != NULL) {
             int start = atoi(start_str);
             int end = atoi(end_str);
-            printf("start: %d End: %d\n", start, end);
             print_from_to(start, end, memory);
         } else {
             fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
@@ -295,26 +288,26 @@ void execute_line(char *line, Interpreter *interpreter,Memory *memory) {
     }
 }
 
+
 void execute_program(char **program, int num_lines, Interpreter *interpreter,Memory *memory) {
     for (int i = 0; i < num_lines; i++) {
         execute_line(program[i], interpreter,memory);
     }
 }
 
-void assign(char *x, char *y, Interpreter *interpreter) {
+void assign(char *x, char *y, Interpreter *interpreter, Memory *memory) {
     // Read input from the user
-    printf("Enter your input: ");
-    fgets(y, sizeof(y), stdin);
-    
+    printf("Enter your input for %s: ", x);
+    fgets(y, MAX_LINE_LENGTH, stdin);
+
     // Remove trailing newline character
     if (y[strlen(y) - 1] == '\n') {
         y[strlen(y) - 1] = '\0';
     }
-    
+
     printf("Assigned %s = %s\n", x, y);
 
     // Store the assigned value in memory
-    Memory *memory = create_memory(); // Create a memory object (you may need to pass this to the function)
     for (int i = 0; i < 60; i++) {
         if (memory->Mem[i].type == VARIABLE && strcmp(memory->Mem[i].data.variable.var_name, x) == 0) {
             // Variable already exists in memory, update its value
@@ -336,14 +329,22 @@ void assign(char *x, char *y, Interpreter *interpreter) {
 
 
 void print_from_to(int start, int end, Memory *memory) {
+    if (start < 0 || start >= 60 || end < 0 || end >= 60) {
+        fprintf(stderr, "Error: Invalid range\n");
+        return;
+    }
+
     for (int num = start; num <= end; num++) {
         if (memory->Mem[num].type == VARIABLE) {
-            printf("%s = %s\n", memory->Mem[num].data.variable.var_name, memory->Mem[num].data.variable.value);
+            printf("%s = %s\n\n", memory->Mem[num].data.variable.var_name, memory->Mem[num].data.variable.value);
+        } else if (memory->Mem[num].type == INSTRUCTION) {
+            printf("Instruction at memory index %d: %s\n", num, memory->Mem[num].data.instruction);
+        } else if (memory->Mem[num].type == PCB_DATA) {
+            printf("PCB data at memory index %d: Process ID - %d\n", num, memory->Mem[num].data.pcb.Pid);
         } else {
-            printf("%d ", num);
+            printf("Unknown type at memory index %d\n", num);
         }
     }
-    printf("\n");
 }
 
 void writeFile(Interpreter *interpreter, const char *filename, const char *data) {
@@ -377,23 +378,60 @@ void readFile(Interpreter *interpreter, const char *filename) {
     mutex_unlock(&interpreter->file_mutex);
 }
 
-int main() {
-    Memory *memory = create_memory();
+Process* create_process(int process_id, int priority, char **instructions, int instruction_count, Memory *memory) {
     int lower_bound, upper_bound;
+    int size_needed = instruction_count + 3 + 1; // Instructions + Variables + PCB
 
-    // Example process with 10 instructions
-    if (allocate_memory(memory, 1, num_instructions, &lower_bound, &upper_bound)) {
-        printf("Process 1 allocated memory from %d to %d\n", lower_bound, upper_bound);
-        PCB *pcb1 = create_pcb(1, 1, lower_bound, upper_bound);
-        store_pcb(memory, pcb1);
-    } else {
-        printf("Failed to allocate memory for Process 1\n");
+    if (!allocate_memory(memory, process_id, instruction_count, &lower_bound, &upper_bound)) {
+        printf("Failed to allocate memory for Process %d\n", process_id);
+        return NULL;
     }
 
-    print_memory(memory);
+    Process *process = (Process *)malloc(sizeof(Process));
+    process->pcb.Pid = process_id;
+    process->pcb.State = NEW;
+    process->pcb.priority = priority;
+    process->pcb.PC = 0;
+    process->pcb.memory_lower_bound = lower_bound;
+    process->pcb.memory_upper_bound = upper_bound;
 
+    for (int i = 0; i < instruction_count; i++) {
+        strcpy(process->instructions[i], instructions[i]);
+    }
+    process->instructionCount = instruction_count;
+
+    store_pcb(memory, &process->pcb);
+
+    return process;
+}
+
+void allocate_and_create_process(Memory *memory, int process_id, int priority, char **instructions, int instruction_count) {
+    int lower_bound, upper_bound;
     
-    
+    if (allocate_memory(memory, process_id, instruction_count, &lower_bound, &upper_bound)) {
+        printf("Process %d allocated memory from %d to %d\n", process_id, lower_bound, upper_bound);
+        PCB *pcb = create_pcb(process_id, priority, lower_bound, upper_bound);
+        store_pcb(memory, pcb);
+        
+        Process *process = create_process(process_id, priority, instructions, instruction_count, memory);
+        if (process != NULL) {
+            processes[process_id] = *process;
+        } else {
+            printf("Failed to create Process %d\n", process_id);
+        }
+    } else {
+        printf("Failed to allocate memory for Process %d\n", process_id);
+    }
+}
+
+
+int main() {
+
+    // Initialize interpreter
+    Interpreter interpreter;
+    mutex_init(&interpreter.user_input_mutex);
+    mutex_init(&interpreter.user_output_mutex);
+
     // File paths for program files
     char *program1_path = "program1.txt";
     char *program2_path = "program2.txt";
@@ -408,19 +446,28 @@ int main() {
     int num_lines_program2 = read_program_file(program2_path, program2);
     int num_lines_program3 = read_program_file(program3_path, program3);
 
-    // Initialize interpreter
-    Interpreter interpreter;
-    mutex_init(&interpreter.user_input_mutex);
-    mutex_init(&interpreter.user_output_mutex);
+    Memory *memory = create_memory();
 
+    // Example process with the read instructions
     // Execute program 1
     execute_program(program1, num_lines_program1, &interpreter, memory);
+    allocate_and_create_process(memory, 1, 1, program1, num_lines_program1);
 
     // Execute program 2
     execute_program(program2, num_lines_program2, &interpreter, memory);
+    allocate_and_create_process(memory, 2, 1, program2, num_lines_program2);
 
     // Execute program 3
     execute_program(program3, num_lines_program3, &interpreter, memory);
+    allocate_and_create_process(memory, 3, 1, program3, num_lines_program3);
+
+    print_memory(memory);
+
+    
+
+    free_program_lines(program1, num_lines_program1);
+    // free_program_lines(program2, num_lines_program2);
+    // free_program_lines(program3, num_lines_program3);
 
     return 0;
 }
