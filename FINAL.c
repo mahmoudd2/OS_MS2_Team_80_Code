@@ -47,64 +47,53 @@ typedef enum
 typedef struct {
     int Pid;
     ProcessState State;
-    int priority;
+    // int priority;
     int PC;
     int memory_lower_bound;
     int memory_upper_bound;
 } PCB;
 
-typedef struct {
-    PCB pcb;
-    char instructions[MAX_INSTRUCTIONS][50];
-    int instructionCount;
-} Process;
-
-Process processes[MAX_PROCESS];
-
 typedef struct
 {
-  PCB *processes[MAX_QUEUE_SIZE];
-  int front;
-  int rear;
-  int size;
-} Queue;
+    char *Name;
+    char *Value;
+}MemoryWord; // name w data strings bsss
+
+MemoryWord Mem[60];
+// ARRAY
+
+// typedef struct {
+//     PCB pcb;
+//     char instructions[MAX_INSTRUCTIONS][50];
+//     int instructionCount;
+// } Process;
 
 
-typedef enum {
-    INSTRUCTION,
-    VARIABLE,
-    PCB_DATA
-} MemoryType;
 
-typedef struct {
-    char var_name[20];
-    char value[20];
-} Variable;
-
-typedef struct
-{
-    MemoryType type;
-    union {
-        char instruction[100];
-        Variable variable;
-        PCB pcb;
-    } data;
-}MemoryWord;
+// cell by cell el pcb
 
 
-typedef struct
-{
-    MemoryWord Mem[60];
-} Memory;
+// Process processes[MAX_PROCESS];
 
-Memory* create_memory() {
-    Memory *mem = (Memory *)malloc(sizeof(Memory));
-    for (int i = 0; i < 60; i++) {
-        mem->Mem[i].type = INSTRUCTION;
-        strcpy(mem->Mem[i].data.instruction, "");
-    }
-    return mem;
-}
+// typedef struct
+// {
+//   PCB *processes[MAX_QUEUE_SIZE];
+//   int front;
+//   int rear;
+//   int size;
+// } Queue;
+
+
+// typedef enum {
+//     INSTRUCTION,
+//     VARIABLE,
+//     PCB_DATA
+// } MemoryType;
+
+// typedef struct {
+//     char var_name[20];
+//     char value[20];
+// } Variable;
 
 int allocate_memory(Memory *mem, int process_id, int num_instructions, int *lower_bound, int *upper_bound) {
     int size_needed = num_instructions + 3 + 1; // Instructions + Variables + PCB
