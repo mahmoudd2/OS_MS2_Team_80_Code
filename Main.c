@@ -1,14 +1,40 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h> 
 
-#define MEMORY_SIZE 60
-#define MAX_PROCESSES 10
-#define MAX_LEVELS 4
-#define MAX_LINE_LENGTH 100
-#define MAX_PROGRAM_LINES 20
+#define MAX_LINES 1000
+#define MAX_LINE_LENGTH 1000
+// #define MAX_PROCESS 1000
+// #define MAX_QUEUE_SIZE 100
+#define MAX_INSTRUCTIONS 8
 
-// Define Process States
+// Define Mutex structure
+typedef struct {
+  pthread_mutex_t mutex;
+} Mutex;
+
+// Mutex functions
+void mutex_init(Mutex *mutex) {
+  pthread_mutex_init(&mutex->mutex, NULL);
+}
+
+void mutex_lock(Mutex *mutex) {
+  pthread_mutex_lock(&mutex->mutex);
+}
+
+void mutex_unlock(Mutex *mutex) {
+  pthread_mutex_unlock(&mutex->mutex);
+}
+
+
+// Define Interpreter structure
+typedef struct {
+  Mutex user_input_mutex;
+  Mutex user_output_mutex; 
+  Mutex file_mutex
+} Interpreter;
+
 typedef enum
 {
   NEW,
@@ -18,218 +44,259 @@ typedef enum
   TERMINATED
 } ProcessState;
 
-// Define PCB structure
-typedef struct
-{
-  int pid;
-  ProcessState state;
-  int priority;
-  int program_counter;
+typedef struct {
+  int Pid;
+  ProcessState State;
+  // int priority;
+  int PC;
   int memory_lower_bound;
   int memory_upper_bound;
-  char *instructions[MAX_PROGRAM_LINES];
-  int instruction_count;
 } PCB;
 
-// Memory structure
 typedef struct
 {
-  char *data[MEMORY_SIZE];
-} Memory;
+  char *Name;
+  char *Value;
+}MemoryWord; // name w data strings bsss
 
-// Process Manager structure
-typedef struct
-{
-  PCB pcb_list[MAX_PROCESSES];
-  int process_count;
-  int next_pid;
-  Memory memory;
-} ProcessManager;
+MemoryWord Memory[60];
 
-void initialize_process_manager(ProcessManager *pm)
-{
-  pm->process_count = 0;
-  pm->next_pid = 1; // Start PID from 1
-
-  for (int i = 0; i < MEMORY_SIZE; i++)
-  {
-    pm->memory.data[i] = NULL;
-  }
-
-  for (int i = 0; i < MAX_PROCESSES; i++)
-  {
-    pm->pcb_list[i].pid = -1; // Indicates unused PCB slot
+void initialize_memory() {
+  for (int i = 0; i < 60; i++) {
+      Memory[i].Name = NULL;
+      Memory[i].Value = NULL;
   }
 }
 
-int create_process(ProcessManager *pm, const char *file_path)
-{
-  if (pm->process_count >= MAX_PROCESSES)
-  {
-    printf("Error: Maximum number of processes reached.\n");
-    return -1;
-  }
+// typedef struct
+// {
+//   PCB *processes[MAX_QUEUE_SIZE];
+//   int front;
+//   int rear;
+//   int size;
+// } Queue;
 
-  // Allocate memory for the process
-  int memory_start = -1;
-  for (int i = 0; i <= MEMORY_SIZE - MAX_PROGRAM_LINES; i++)
-  {
-    int free = 1;
-    for (int j = 0; j < MAX_PROGRAM_LINES; j++)
-    {
-      if (pm->memory.data[i + j] != NULL)
-      {
-        free = 0;
+int allocate_memory(int process_id, int size_needed, int *lower_bound, int *upper_bound) {
+  for (int i = 0; i <= 60 - size_needed; i++) {
+    int free_block = 1;
+    for (int j = 0; j < size_needed; j++) {
+      if (Memory[i + j].Name != NULL) {
+        free_block = 0;
         break;
       }
     }
-    if (free)
-    {
-      memory_start = i;
-      break;
+    if (free_block) {
+      *lower_bound = i;
+      *upper_bound = i + size_needed - 1;
+      for (int j = 0; j < size_needed; j++) {
+        Memory[i + j].Name = strdup("PCB");
+        Memory[i + j].Value = strdup("Process");
+      }
+      return 1;
     }
   }
-
-  if (memory_start == -1)
-  {
-    printf("Error: Not enough memory to create process.\n");
-    return -1;
-  }
-
-  // Initialize PCB
-  PCB *pcb = &pm->pcb_list[pm->process_count];
-  pcb->pid = pm->next_pid++;
-  pcb->state = NEW;
-  pcb->priority = 1; // Default priority
-  pcb->program_counter = 0;
-  pcb->memory_lower_bound = memory_start;
-  pcb->memory_upper_bound = memory_start + MAX_PROGRAM_LINES - 1;
-  pcb->instruction_count = 0;
-
-  // Read program file
-  FILE *file = fopen(file_path, "r");
-  if (file == NULL)
-  {
-    printf("Error: Unable to open file %s\n", file_path);
-    return -1;
-  }
-
-  char line[MAX_LINE_LENGTH];
-  while (fgets(line, sizeof(line), file) != NULL)
-  {
-    // Remove newline character
-    line[strcspn(line, "\n")] = '\0';
-
-    // Store instruction in PCB
-    pcb->instructions[pcb->instruction_count] = strdup(line);
-    pcb->instruction_count++;
-
-    if (pcb->instruction_count > MAX_PROGRAM_LINES)
-    {
-      printf("Error: Program exceeds maximum number of lines.\n");
-      fclose(file);
-      return -1;
-    }
-  }
-  fclose(file);
-
-  // Mark memory as allocated
-  for (int i = memory_start; i < memory_start + pcb->instruction_count; i++)
-  {
-    pm->memory.data[i] = "ALLOCATED"; // Placeholder for actual data
-  }
-
-  pm->process_count++;
-  return pcb->pid;
+  return 0;
 }
 
-void execute_instruction(PCB *pcb)
-{
-  if (pcb->program_counter < pcb->instruction_count)
-  {
-    printf("Executing instruction for process %d: %s\n", pcb->pid, pcb->instructions[pcb->program_counter]);
-    // Here you would parse and execute the instruction
-    // For this example, we'll just print the instruction
+void deallocate_memory(int lower_bound, int upper_bound) {
+  for (int i = lower_bound; i <= upper_bound; i++) {
+    free(Memory[i].Name);
+    free(Memory[i].Value);
+    Memory[i].Name = NULL;
+    Memory[i].Value = NULL;
+  }
+}
 
-    pcb->program_counter++;
+void print_memory() {
+  for (int i = 0; i < 60; i++) {
+    if (Memory[i].Name != NULL && Memory[i].Value != NULL) {
+      printf("Memory[%d]: %s = %s\n", i, Memory[i].Name, Memory[i].Value);
+    }
+    else
+    {
+      printf("Memory[%d]: Empty\n", i);
+    }
+  }
+}
+
+PCB* create_pcb(int process_id, int lower_bound, int upper_bound) {
+    PCB *pcb = (PCB *)malloc(sizeof(PCB));
+    pcb->Pid = process_id;
+    pcb->State = READY;
+    pcb->PC = 0;
+    pcb->memory_lower_bound = lower_bound;
+    pcb->memory_upper_bound = upper_bound;
+    return pcb;
+}
+
+void store_variable(int lower_bound, const char *name, const char *value) {
+    for (int i = lower_bound; i < 60; i++) {
+        if (Memory[i].Name == NULL) {
+            Memory[i].Name = strdup(name);
+            Memory[i].Value = strdup(value);
+            return;
+        }
+    }
+    printf("Memory is full, cannot store %s = %s\n", name, value);
+}
+
+void print_from_to(int start, int end) {
+    if (start < 0 || start >= 60 || end < 0 || end >= 60) {
+        fprintf(stderr, "Error: Invalid range\n");
+        return;
+    }
+
+    for (int num = start; num <= end; num++) {
+        if (Memory[num].Name != NULL && Memory[num].Value != NULL) {
+            printf("%s = %s\n", Memory[num].Name, Memory[num].Value);
+        } else {
+            printf("Memory[%d]: Empty\n", num);
+        }
+    }
+}
+
+
+void execute_line(char *line, Interpreter *interpreter, int lower_bound) {
+  if (line == NULL) {
+    fprintf(stderr, "Error: Null pointer encountered\n");
+    return;
+  }
+
+  char *token = strtok(line, " ");
+  if (token == NULL) {
+    fprintf(stderr, "Error: No token found in line\n");
+    return;
+  }
+
+  if (strcmp(token, "assign") == 0) {
+    char *var_name = strtok(NULL, " ");
+    char value[MAX_LINE_LENGTH];
+    if (var_name != NULL) {
+      printf("Enter your input for %s: ", var_name);
+      fgets(value, MAX_LINE_LENGTH, stdin);
+      if (value[strlen(value) - 1] == '\n') {
+        value[strlen(value) - 1] = '\0';
+      }
+      printf("Assigned %s = %s\n", var_name, value);
+      store_variable(lower_bound, var_name, value);
+      }
+    else
+    {
+      fprintf(stderr, "Error: Insufficient arguments for assign command\n");
+    }
+  } 
+  else if (strcmp(token, "printFromTo") == 0)
+  {
+    char *start_str = strtok(NULL, " ");
+    char *end_str = strtok(NULL, " ");
+    if (start_str != NULL && end_str != NULL) {
+      int start = atoi(start_str);
+      int end = atoi(end_str);
+      print_from_to(start, end);
+    }
+    else
+    {
+      fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
+    }
+  }
+}
+
+void execute_program(char **program, int num_lines, Interpreter *interpreter, int lower_bound) {
+  for (int i = 0; i < num_lines; i++) {
+    execute_line(program[i], interpreter, lower_bound);
+  }
+}
+
+int read_program_file(const char *file_path, char **program) {
+  FILE *file = fopen(file_path, "r");
+  if (file == NULL) {
+    fprintf(stderr, "Error: Unable to open file %s\n", file_path);
+    return -1;
+  }
+
+  int num_lines = 0;
+  char line[MAX_LINE_LENGTH];
+  while (fgets(line, MAX_LINE_LENGTH, file) != NULL && num_lines < MAX_LINES) {
+    if (line[strlen(line) - 1] == '\n') {
+      line[strlen(line) - 1] = '\0';
+    }
+    program[num_lines] = strdup(line);
+    num_lines++;
+  }
+
+  fclose(file);
+  return num_lines;
+}
+
+void free_program_lines(char **program, int num_lines) {
+  for (int i = 0; i < num_lines; i++) {
+    free(program[i]);
+  }
+}
+
+int main() {
+  Interpreter interpreter;
+  mutex_init(&interpreter.user_input_mutex);
+  mutex_init(&interpreter.user_output_mutex);
+  mutex_init(&interpreter.file_mutex);
+
+  initialize_memory();
+
+  char *program1_path = "program1.txt";
+  char *program2_path = "program2.txt";
+  char *program3_path = "program3.txt";
+
+  char *program1[MAX_LINES];
+  char *program2[MAX_LINES];
+  char *program3[MAX_LINES];
+
+  int num_lines_program1 = read_program_file(program1_path, program1);
+  int num_lines_program2 = read_program_file(program2_path, program2);
+  int num_lines_program3 = read_program_file(program3_path, program3);
+
+  int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
+  int size_needed2 = num_lines_program2 + 3 + 5;
+  int size_needed3 = num_lines_program3 + 3 + 5;
+
+  int lower_bound1, upper_bound1;
+  int lower_bound2, upper_bound2;
+  int lower_bound3, upper_bound3;
+
+  if (allocate_memory(1, size_needed1, &lower_bound1, &upper_bound1)) {
+    PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+    execute_program(program1, num_lines_program1, &interpreter, lower_bound1);
+    free(pcb1);
+  } 
+  else 
+  {
+    printf("Failed to allocate memory for Program 1\n");
+  }
+
+  if (allocate_memory(2, size_needed2, &lower_bound2, &upper_bound2)) {
+    PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
+    execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
+    free(pcb2);
   }
   else
   {
-    pcb->state = TERMINATED;
-    printf("Process %d terminated\n", pcb->pid);
+    printf("Failed to allocate memory for Program 2\n");
   }
-}
 
-void schedule_processes(ProcessManager *pm)
-{
-  // Define the quantum for each level
-  int quantum[MAX_LEVELS] = {1, 2, 4, 8};
-  // Initialize the queues
-  PCB *ready_queues[MAX_LEVELS][MAX_PROCESSES];
-  int queue_counts[MAX_LEVELS] = {0};
-
-  // Populate the ready queues based on process states
-  for (int i = 0; i < pm->process_count; i++)
+  if (allocate_memory(3, size_needed3, &lower_bound3, &upper_bound3)) {
+    PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+    execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
+    free(pcb3);
+  } 
+  else
   {
-    PCB *pcb = &pm->pcb_list[i];
-    if (pcb->state == NEW || pcb->state == READY)
-    {
-      pcb->state = READY;
-      ready_queues[pcb->priority][queue_counts[pcb->priority]++] = pcb;
-    }
+    printf("Failed to allocate memory for Program 3\n");
   }
 
-  // Schedule processes from the highest priority queue to the lowest
-  for (int level = 0; level < MAX_LEVELS; level++)
-  {
-    for (int i = 0; i < queue_counts[level]; i++)
-    {
-      PCB *pcb = ready_queues[level][i];
-      if (pcb->state == READY)
-      {
-        pcb->state = RUNNING;
-        printf("Running process %d at priority level %d\n", pcb->pid, pcb->priority);
+  print_memory();
 
-        // Simulate execution for the time quantum of this level
-        for (int j = 0; j < quantum[level]; j++)
-        {
-          execute_instruction(pcb);
-          if (pcb->state == TERMINATED)
-          {
-            break;
-          }
-        }
+  free_program_lines(program1, num_lines_program1);
+  free_program_lines(program2, num_lines_program2);
+  free_program_lines(program3, num_lines_program3);
 
-        if (pcb->state != TERMINATED)
-        {
-          // If process is not terminated, move to appropriate queue
-          if (level < MAX_LEVELS - 1)
-          {
-            pcb->priority++; // Demote to lower priority
-          }
-          pcb->state = READY; // Set state back to READY
-        }
-      }
-    }
-  }
-}
-
-int main()
-{
-  ProcessManager pm;
-  initialize_process_manager(&pm);
-
-  // Example programs with their sizes
-  create_process(&pm, "program1.txt");
-  create_process(&pm, "program2.txt");
-  create_process(&pm, "program3.txt");
-
-  // Schedule processes
-  for (int cycle = 0; cycle < 10; cycle++)
-  {
-    printf("Cycle %d\n", cycle);
-    schedule_processes(&pm);
-  }
-
-  return 0;
+    return 0;
 }
