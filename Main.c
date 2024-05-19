@@ -66,7 +66,8 @@ Queue* create_queue();
 void enqueue(Queue *q, PCB *process);
 PCB* dequeue(Queue *q);
 int is_empty(Queue *q);
-void execute_program_with_round_robin(char **program, int num_lines, Interpreter *interpreter, int lower_bound);
+//void execute_program_with_round_robin(char **program, int num_lines, Interpreter *interpreter, int lower_bound);
+void execute_program_with_round_robin(PCB *process, char **program, int num_lines, Interpreter *interpreter);
 
 // Global variables
 Queue *ready_queue;
@@ -158,7 +159,7 @@ void print_from_to(int start, int end) {
     }
 }
 
-void execute_line(char *line, Interpreter *interpreter, int lower_bound) {
+/*void execute_line(char *line, Interpreter *interpreter, int lower_bound) {
     if (line == NULL) {
         fprintf(stderr, "Error: Null pointer encountered\n");
         return;
@@ -198,7 +199,53 @@ void execute_line(char *line, Interpreter *interpreter, int lower_bound) {
             fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
         }
     }
+}*/
+void execute_line(char *line, Interpreter *interpreter, int lower_bound) {
+    if (line == NULL) {
+        fprintf(stderr, "Error: Null pointer encountered\n");
+        return;
+    }
+
+    printf("Executing line: %s\n", line); // Debug statement
+
+    char *token = strtok(line, " ");
+    if (token == NULL) {
+        fprintf(stderr, "Error: No token found in line\n");
+        return;
+    }
+
+    printf("Token: %s\n", token); // Debug statement
+
+    if (strcmp(token, "assign") == 0) {
+        char *var_name = strtok(NULL, " ");
+        char value[MAX_LINE_LENGTH];
+        if (var_name != NULL) {
+            printf("Enter your input for %s: ", var_name);
+            fgets(value, MAX_LINE_LENGTH, stdin);
+            if (value[strlen(value) - 1] == '\n') {
+                value[strlen(value) - 1] = '\0';
+            }
+            printf("Assigned %s = %s\n", var_name, value);
+            store_variable(lower_bound, var_name, value);
+        }
+        else {
+            fprintf(stderr, "Error: Insufficient arguments for assign command\n");
+        }
+    } 
+    else if (strcmp(token, "printFromTo") == 0) {
+        char *start_str = strtok(NULL, " ");
+        char *end_str = strtok(NULL, " ");
+        if (start_str != NULL && end_str != NULL) {
+            int start = atoi(start_str);
+            int end = atoi(end_str);
+            print_from_to(start, end);
+        }
+        else {
+            fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
+        }
+    }
 }
+
 
 // void execute_program(char **program, int num_lines, Interpreter *interpreter, int lower_bound) {
 //     for (int i = 0; i < num_lines; i++) {
@@ -352,7 +399,7 @@ int is_empty(Queue *q) {
     return (q->size == 0);
 }
 
-void execute_program_with_round_robin(char **program, int num_lines, Interpreter *interpreter, int lower_bound) {
+/*void execute_program_with_round_robin(char **program, int num_lines, Interpreter *interpreter, int lower_bound) {
     int quantum = 2; // Quantum for round-robin scheduling
     int remaining_lines = num_lines;
     int current_line = 0;
@@ -367,8 +414,79 @@ void execute_program_with_round_robin(char **program, int num_lines, Interpreter
         printf("Context switch: executing next process or time slice expiration\n");
     }
 }
+*/
+/*void execute_program_with_round_robin(PCB *process, char **program, int num_lines, Interpreter *interpreter) {
+    int quantum = 2; // Quantum for round-robin scheduling
+    int lines_to_execute = (num_lines - process->PC >= quantum) ? quantum : (num_lines - process->PC);
+      printf("Process PID: %d\n", process->Pid);
+      printf("Quantum: %d\n", quantum);
+      printf("Lines to execute: %d\n", lines_to_execute);
 
-int main()
+    for (int i = 0; i < lines_to_execute; i++) {
+        printf("Executing line %d/%d\n", process->PC + i + 1, num_lines);
+        execute_line(program[process->PC], interpreter, process->memory_lower_bound);
+        process->PC++;
+        if (process->PC >= num_lines) {
+            break;
+        }
+    }
+    // Simulate context switch or time slice expiration
+    printf("Context switch: executing next process or time slice expiration\n");
+}*/
+/*void execute_program_with_round_robin(PCB *process, char **program, int num_lines, Interpreter *interpreter) {
+    int quantum = 2; // Quantum for round-robin scheduling
+    int remaining_lines = num_lines - process->PC; // Calculate remaining lines to execute
+    int lines_to_execute = (remaining_lines >= quantum) ? quantum : remaining_lines; // Determine number of lines to execute
+
+    for (int i = 0; i < lines_to_execute; i++) {
+        execute_line(program[process->PC], interpreter, process->memory_lower_bound);
+        process->PC++; // Increment program counter
+        if (process->PC >= num_lines) { // Check if program counter reached end of program
+            break;
+        }
+    }
+
+    if (process->PC < num_lines) { // If program not finished, update process state to READY
+        process->State = READY;
+        enqueue(ready_queue, process); // Enqueue the process back into the ready queue
+    } else { // If program finished, update process state to TERMINATED
+        process->State = TERMINATED;
+        printf("Process [PID %d] finished execution\n", process->Pid);
+        deallocate_memory(process->memory_lower_bound, process->memory_upper_bound);
+        free(process);
+    }
+    // Simulate context switch or time slice expiration
+    printf("Context switch: executing next process or time slice expiration\n");
+}
+*/
+void execute_program_with_round_robin(PCB *process, char **program, int num_lines, Interpreter *interpreter) {
+    int quantum = 2; // Quantum for round-robin scheduling
+    int remaining_lines = num_lines - process->PC; // Calculate remaining lines to execute
+    int lines_to_execute = (remaining_lines >= quantum) ? quantum : remaining_lines; // Determine number of lines to execute
+
+    for (int i = 0; i < lines_to_execute; i++) {
+        execute_line(program[process->PC], interpreter, process->memory_lower_bound);
+        process->PC++; // Increment program counter
+        if (process->PC >= num_lines) { // Check if program counter reached end of program
+            break;
+        }
+    }
+
+    if (process->PC < num_lines) { // If program not finished, update process state to READY and re-enqueue
+        process->State = READY;
+        enqueue(ready_queue, process); // Enqueue the process back into the ready queue
+    } else { // If program finished, update process state to TERMINATED and deallocate memory
+        process->State = TERMINATED;
+        printf("Process [PID %d] finished execution\n", process->Pid);
+        deallocate_memory(process->memory_lower_bound, process->memory_upper_bound);
+        free(process);
+    }
+    // Simulate context switch or time slice expiration
+    printf("Context switch: executing next process or time slice expiration\n");
+}
+
+
+/*int main()
 {
   Interpreter interpreter;
   mutex_init(&interpreter.user_input_mutex);
@@ -440,4 +558,98 @@ int main()
   free_program_lines(program3, num_lines_program3);
 
   return 0;
+}*/
+int main() {
+    Interpreter interpreter;
+    mutex_init(&interpreter.user_input_mutex);
+    mutex_init(&interpreter.user_output_mutex);
+    mutex_init(&interpreter.file_mutex);
+
+    initialize_memory();
+
+    ready_queue = create_queue();
+
+    char *program1_path = "program1.txt";
+    char *program2_path = "program2.txt";
+    char *program3_path = "program3.txt";
+
+    char *program1[MAX_LINES];
+    char *program2[MAX_LINES];
+    char *program3[MAX_LINES];
+
+    int num_lines_program1 = read_program_file(program1_path, program1);
+    int num_lines_program2 = read_program_file(program2_path, program2);
+    int num_lines_program3 = read_program_file(program3_path, program3);
+
+    int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
+    int size_needed2 = num_lines_program2 + 3 + 5;
+    int size_needed3 = num_lines_program3 + 3 + 5;
+
+    int lower_bound1, upper_bound1;
+    int lower_bound2, upper_bound2;
+    int lower_bound3, upper_bound3;
+
+    if (allocate_memory("1", size_needed1, &lower_bound1, &upper_bound1)) {
+        PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+        enqueue(ready_queue, pcb1);
+    } else {
+        printf("Failed to allocate memory for Program 1\n");
+    }
+
+    if (allocate_memory("2", size_needed2, &lower_bound2, &upper_bound2)) {
+        PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
+        enqueue(ready_queue, pcb2);
+    } else {
+        printf("Failed to allocate memory for Program 2\n");
+    }
+
+    if (allocate_memory("3", size_needed3, &lower_bound3, &upper_bound3)) {
+        PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+        enqueue(ready_queue, pcb3);
+    } else {
+        printf("Failed to allocate memory for Program 3\n");
+    }
+
+    while (!is_empty(ready_queue)) {
+        PCB *current_process = dequeue(ready_queue);
+        if (current_process != NULL) {
+            current_process->State = RUNNING;
+            printf("Currently executing process [PID %d]\n", current_process->Pid);
+
+            // Determine which program to execute
+            char **program;
+            int num_lines;
+            if (current_process->Pid == 1) {
+                program = program1;
+                num_lines = num_lines_program1;
+            } else if (current_process->Pid == 2) {
+                program = program2;
+                num_lines = num_lines_program2;
+            } else {
+                program = program3;
+                num_lines = num_lines_program3;
+            }
+
+            // Execute the program with round-robin scheduling
+            execute_program_with_round_robin(current_process, program, num_lines, &interpreter);
+
+            if (current_process->PC < num_lines) {
+                current_process->State = READY;
+                enqueue(ready_queue, current_process);
+            } else {
+                current_process->State = TERMINATED;
+                printf("Process [PID %d] finished execution\n", current_process->Pid);
+                deallocate_memory(current_process->memory_lower_bound, current_process->memory_upper_bound);
+                free(current_process);
+            }
+        }
+    }
+
+    print_memory();
+
+    free_program_lines(program1, num_lines_program1);
+    free_program_lines(program2, num_lines_program2);
+    free_program_lines(program3, num_lines_program3);
+
+    return 0;
 }
