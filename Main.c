@@ -9,7 +9,8 @@
 // #define MAX_QUEUE_SIZE 100
 #define MAX_INSTRUCTIONS 8
 
-char *instructions[8]; 
+char *instructions[8];
+
 // Define Mutex structure
 typedef struct {
   pthread_mutex_t mutex;
@@ -77,25 +78,25 @@ void initialize_memory() {
 //   int size;
 // } Queue;
 
-// Function to convert an integer to a string
-char* int_to_string(int number) {
-  // Determine the length of the string required
-  int length = snprintf(NULL, 0, "%d", number);
+// // Function to convert an integer to a string
+// char* int_to_string(int number) {
+//   // Determine the length of the string required
+//   int length = snprintf(NULL, 0, "%d", number);
   
-  // Allocate memory for the string (length + 1 for the null terminator)
-  char *str = (char *)malloc(length + 1);
+//   // Allocate memory for the string (length + 1 for the null terminator)
+//   char *str = (char *)malloc(length + 1);
   
-  // Check if memory allocation was successful
-  if (str == NULL) {
-    fprintf(stderr, "Memory allocation failed\n");
-    exit(1);
-  }
+//   // Check if memory allocation was successful
+//   if (str == NULL) {
+//     fprintf(stderr, "Memory allocation failed\n");
+//     exit(1);
+//   }
   
-  // Convert the integer to a string
-  sprintf(str, "%d", number);
+//   // Convert the integer to a string
+//   sprintf(str, "%d", number);
   
-  return str;
-}
+//   return str;
+// }
 
 const char *process_state_to_string(ProcessState state)
 {
@@ -174,8 +175,27 @@ int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_boun
   return 0;
 }
 
-void deallocate_memory(int lower_bound, int upper_bound) {
-  for (int i = lower_bound; i <= upper_bound; i++) {
+void store_variable(int lower_bound, char *name, char *value)
+{
+  int temp = lower_bound + 8;
+  for (int i = lower_bound + 5; i < temp; i++)
+  {
+    if (Memory[i].Value == NULL)
+    {
+      Memory[i].Name = name;
+      Memory[i].Value = value;
+      return;
+    }
+  }
+  printf("Memory is full, cannot store %s = %s\n", name, value);
+}
+
+
+
+void deallocate_memory(int lower_bound, int upper_bound)
+{
+  for (int i = lower_bound; i <= upper_bound; i++)
+  {
     free(Memory[i].Name);
     free(Memory[i].Value);
     Memory[i].Name = NULL;
@@ -213,7 +233,9 @@ void print_memory()
   }
 }
 
-PCB* create_pcb(int process_id, int lower_bound, int upper_bound) {
+PCB *create_pcb(int process_id, int lower_bound, int upper_bound)
+{
+  // allocates memory for a new PCB
   PCB *pcb = (PCB *)malloc(sizeof(PCB));
   pcb->Pid = process_id;
   pcb->State = READY;
@@ -231,21 +253,6 @@ char* get_value_from_memory(const char* name) {
     }
   }
   return NULL;
-}
-
-void store_variable(int lower_bound, char *name, char *value)
-{
-  int temp = lower_bound + 8;
-  for (int i = lower_bound + 5; i < temp; i++)
-  {
-    if (Memory[i].Value == NULL)
-    {
-      Memory[i].Name = name;
-      Memory[i].Value = value;
-      return;
-    }
-  }
-  printf("Memory is full, cannot store %s = %s\n", name, value);
 }
 
 void print (char *var_name)
@@ -304,14 +311,17 @@ void writeFile(char *name, char *data) {
 }
 
 
-void execute_line(char *line, Interpreter *interpreter, int lower_bound, int upper_bound) {
-  if (line == NULL) {
+void execute_line(char *line, Interpreter *interpreter, int lower_bound)
+{
+  if (line == NULL)
+  {
     fprintf(stderr, "Error: Null pointer encountered\n");
     return;
   }
 
   char *token = strtok(line, " ");
-  if (token == NULL) {
+  if (token == NULL)
+  {
     fprintf(stderr, "Error: No token found in line\n");
     return;
   }
@@ -335,7 +345,8 @@ void execute_line(char *line, Interpreter *interpreter, int lower_bound, int upp
     {
       fprintf(stderr, "Error: Insufficient arguments for assign command\n");
     }
-  } else if (strcmp(token, "printFromTo") == 0) {
+  }
+  else if (strcmp(token, "printFromTo") == 0) {
     char *start_str = strtok(NULL, " ");
     char *end_str = strtok(NULL, " ");
     if (start_str != NULL && end_str != NULL) {
@@ -357,25 +368,30 @@ void execute_line(char *line, Interpreter *interpreter, int lower_bound, int upp
   } 
 }
 
-
-void execute_program(char **program, int num_lines, Interpreter *interpreter, int lower_bound, int upper_bound) {
-  for (int i = 0; i < num_lines; i++) {
-    execute_line(program[i], interpreter, lower_bound, upper_bound);
+void execute_program(char **program, int num_lines, Interpreter *interpreter, int lower_bound)
+{
+  for (int i = 0; i < num_lines; i++)
+  {
+    execute_line(program[i], interpreter, lower_bound);
   }
 }
 
 
-int read_program_file(const char *file_path, char **program) {
+int read_program_file(const char *file_path, char **program)
+{
   FILE *file = fopen(file_path, "r");
-  if (file == NULL) {
+  if (file == NULL)
+  {
     fprintf(stderr, "Error: Unable to open file %s\n", file_path);
     return -1;
   }
 
   int num_lines = 0;
   char line[MAX_LINE_LENGTH];
-  while (fgets(line, MAX_LINE_LENGTH, file) != NULL && num_lines < MAX_LINES) {
-    if (line[strlen(line) - 1] == '\n') {
+  while (fgets(line, MAX_LINE_LENGTH, file) != NULL && num_lines < MAX_LINES)
+  {
+    if (line[strlen(line) - 1] == '\n')
+    {
       line[strlen(line) - 1] = '\0';
     }
     program[num_lines] = strdup(line);
@@ -387,8 +403,10 @@ int read_program_file(const char *file_path, char **program) {
   return num_lines;
 }
 
-void free_program_lines(char **program, int num_lines) {
-  for (int i = 0; i < num_lines; i++) {
+void free_program_lines(char **program, int num_lines)
+{
+  for (int i = 0; i < num_lines; i++)
+  {
     free(program[i]);
   }
 }
@@ -425,7 +443,7 @@ int main() {
 
   if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
   {
-    execute_program(program1, num_lines_program1, &interpreter, lower_bound1 , upper_bound1);
+    execute_program(program1, num_lines_program1, &interpreter, lower_bound1 );
     free(pcb1);
   }
   else
@@ -493,7 +511,7 @@ int main() {
   // char *temppp = get_value_from_memory("a",0,14);
   // printf("temp: %s\n",temppp);
 
-  free_program_lines(program1, num_lines_program1);
+  // free_program_lines(program1, num_lines_program1);
   // free_program_lines(program2, num_lines_program2);
   // free_program_lines(program3, num_lines_program3);
 
