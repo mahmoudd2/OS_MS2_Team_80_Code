@@ -439,17 +439,17 @@ int main() {
   int lower_bound2, upper_bound2;
   int lower_bound3, upper_bound3;
 
-  PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+  // PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
 
-  if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
-  {
-    execute_program(program1, num_lines_program1, &interpreter, lower_bound1 );
-    free(pcb1);
-  }
-  else
-  {
-    printf("Failed to allocate memory for Program 1\n");
-  }
+  // if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
+  // {
+  //   execute_program(program1, num_lines_program1, &interpreter, lower_bound1 );
+  //   free(pcb1);
+  // }
+  // else
+  // {
+  //   printf("Failed to allocate memory for Program 1\n");
+  // }
 
 
   // if (allocate_memory("2", size_needed2, &lower_bound2, &upper_bound2)) {
@@ -471,36 +471,36 @@ int main() {
   // {
   //   printf("Failed to allocate memory for Program 3\n");
   // }
-  // Memory[0].Name = "PID:";
-  // Memory[0].Value = "1";
-  // Memory[1].Name = "STATE:";
-  // Memory[1].Value = "READY";
-  // Memory[2].Name = "PC:";
-  // Memory[2].Value = "8";
-  // Memory[3].Name = "Lower_bound:";
-  // Memory[3].Value = "0";  
-  // Memory[4].Name = "Upper_Bound:";
-  // Memory[4].Value = "14";
-  // Memory[5].Name = "Var1:";
-  // Memory[5].Value = NULL;
-  // Memory[6].Name = "Var2:";
-  // Memory[6].Value = NULL;
-  // Memory[7].Name = "Var3:";
-  // Memory[7].Value = NULL;
-  // Memory[8].Name = "INST1:";
-  // Memory[8].Value = "semWait userInput";
-  // Memory[9].Name = "INST2:";
-  // Memory[9].Value = "   a input";
-  // Memory[10].Name = "INST3:";
-  // Memory[10].Value = "assign b input";
-  // Memory[11].Name = "INST4:";
-  // Memory[11].Value = "semSignal userInput";
-  // Memory[12].Name = "INST5:";
-  // Memory[12].Value = "semWait userOutput";
-  // Memory[13].Name = "INST6:";
-  // Memory[13].Value = "printFromTo a b";
-  // Memory[14].Name = "INST7:";
-  // Memory[14].Value = "semSignal userOutput";
+  Memory[0].Name = "PID:";
+  Memory[0].Value = "1";
+  Memory[1].Name = "STATE:";
+  Memory[1].Value = "READY";
+  Memory[2].Name = "PC:";
+  Memory[2].Value = "8";
+  Memory[3].Name = "Lower_bound:";
+  Memory[3].Value = "0";  
+  Memory[4].Name = "Upper_Bound:";
+  Memory[4].Value = "14";
+  Memory[5].Name = "Var1:";
+  Memory[5].Value = NULL;
+  Memory[6].Name = "Var2:";
+  Memory[6].Value = NULL;
+  Memory[7].Name = "Var3:";
+  Memory[7].Value = NULL;
+  Memory[8].Name = "INST1:";
+  Memory[8].Value = "semWait userInput";
+  Memory[9].Name = "INST2:";
+  Memory[9].Value = "   a input";
+  Memory[10].Name = "INST3:";
+  Memory[10].Value = "assign b input";
+  Memory[11].Name = "INST4:";
+  Memory[11].Value = "semSignal userInput";
+  Memory[12].Name = "INST5:";
+  Memory[12].Value = "semWait userOutput";
+  Memory[13].Name = "INST6:";
+  Memory[13].Value = "printFromTo a b";
+  Memory[14].Name = "INST7:";
+  Memory[14].Value = "semSignal userOutput";
   print_memory();
 
   // store_variable(0,"a","HAMADA");

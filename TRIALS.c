@@ -149,32 +149,30 @@ int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_boun
         Memory[i + 5 + k].Name = strdup("Variable");
         Memory[i + 5 + k].Value = strdup("");
       }
-      int temp = 0;
+      // int temp = 0;
       for (int j = 8; j < size_needed; j++)
       {
         Memory[i + j].Name = strdup("Instruction");
-        Memory[i + j].Value = strdup(instructions[temp]);
-        temp++;
+        Memory[i + j].Value = strdup("");
+        // temp++;
       }
       return 1;
     }
   }
   return 0;
 }
-void store_variable(int lower_bound, char *name, char *value)
-{
-  int temp = lower_bound + 8;
-  for (int i = lower_bound + 5; i < temp; i++)
-  {
-    if (Memory[i].Value == NULL)
-    {
-      Memory[i].Name = name;
-      Memory[i].Value = value;
+void store_variable(int lower_bound, char *name, char *value) {
+  int var_bound = lower_bound + 8;  // Start from 8 as instructions start from 8.
+  for (int i = lower_bound + 5; i < var_bound; i++) {
+    if (Memory[i].Value == NULL || strcmp(Memory[i].Name, name) == 0) {
+      Memory[i].Name = strdup(name);
+      Memory[i].Value = strdup(value);
       return;
     }
   }
   printf("Memory is full, cannot store %s = %s\n", name, value);
 }
+
 
 void deallocate_memory(int lower_bound, int upper_bound)
 {
@@ -210,9 +208,14 @@ void print_memory()
         printf("Memory[%d]: %s = %s\n", i, Memory[i].Name, Memory[i].Value);
       }
     }
+    else if (Memory[i].Name != NULL)
+    {
+      printf("Memory[%d]: %s\n", i, Memory[i].Name);
+    }
     else
     {
       printf("Memory[%d]: Empty\n", i);
+
     }
   }
 }
@@ -249,7 +252,7 @@ void printFromTo(char *start_num, char *end_num)
   {
     printf("%d ",i);
   }
-  printf("\n");
+  printf("\n\n");
 }
 
 void writeFile(char *name, char *data) {
@@ -290,48 +293,54 @@ void writeFile(char *name, char *data) {
 
 void print (char *var_name)
 {
-  char *value = get_value_from_memory(var_name);
-  printf("%s = %s\n",var_name,value);
+  if (var_name != NULL)
+  {
+    char *value = get_value_from_memory(var_name);
+    printf("%s = %s\n",var_name,value);
+  }
+  else
+  {
+    printf("el print msh shgal");
+  }
+
 }
 
 
 
-void execute_line(char *line, Interpreter *interpreter, int lower_bound)
-{
-  if (line == NULL)
-  {
-    fprintf(stderr, "Error: Null pointer encountered\n");
+void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound, int PC) {
+  if (Mem[PC].Value == NULL) {
+    fprintf(stderr, "Error: Null pointer encountered at PC %d\n", PC);
     return;
   }
 
+  // Create a writable copy of the line
+  char line[MAX_LINE_LENGTH];
+  strncpy(line, Mem[PC].Value, MAX_LINE_LENGTH - 1);
+  line[MAX_LINE_LENGTH - 1] = '\0';  // Ensure null-termination
+
   char *token = strtok(line, " ");
-  if (token == NULL)
-  {
+  if (token == NULL) {
     fprintf(stderr, "Error: No token found in line\n");
     return;
   }
 
-  if (strcmp(token, "assign") == 0)
-  {
+  if (strcmp(token, "assign") == 0) {
     char *var_name = strtok(NULL, " ");
-    char value[MAX_LINE_LENGTH];
-    if (var_name != NULL)
-    {
+    char *value_type = strtok(NULL, " ");
+
+    if (var_name != NULL && value_type != NULL && strcmp(value_type, "input") == 0) {
+      char value[MAX_LINE_LENGTH];
       printf("Enter your input for %s: ", var_name);
       fgets(value, MAX_LINE_LENGTH, stdin);
-      if (value[strlen(value) - 1] == '\n')
-      {
+      if (value[strlen(value) - 1] == '\n') {
         value[strlen(value) - 1] = '\0';
       }
       printf("Assigned %s = %s\n", var_name, value);
       store_variable(lower_bound, var_name, value);
-    }
-    else
-    {
+    } else {
       fprintf(stderr, "Error: Insufficient arguments for assign command\n");
     }
-  }
-  else if (strcmp(token, "printFromTo") == 0) {
+  } else if (strcmp(token, "printFromTo") == 0) {
     char *start_str = strtok(NULL, " ");
     char *end_str = strtok(NULL, " ");
     if (start_str != NULL && end_str != NULL) {
@@ -348,16 +357,19 @@ void execute_line(char *line, Interpreter *interpreter, int lower_bound)
   } else if (strcmp(token, "print") == 0) {
     char *var_name = strtok(NULL, " ");
     if (var_name != NULL) {
-    print(var_name);
+      print(var_name);
     }
-  } 
+  } else {
+    printf("mfesh haga\n");
+  }
 }
 
-void execute_program(char **program, int num_lines, Interpreter *interpreter, int lower_bound)
+void execute_program(MemoryWord *Memory, Interpreter *interpreter, int lower_bound, int upper_bound,int pc)
 {
-  for (int i = 0; i < num_lines; i++)
+  for (int i = pc; i < upper_bound; i++)
   {
-    execute_line(program[i], interpreter, lower_bound);
+    execute_line(Memory, interpreter, lower_bound,pc);
+    pc++;
   }
 }
 
@@ -382,6 +394,7 @@ int read_program_file(const char *file_path, char **program)
     instructions[num_lines] = program[num_lines];
     num_lines++;
   }
+
   fclose(file);
   return num_lines;
 }
@@ -423,72 +436,74 @@ int main()
   int lower_bound2, upper_bound2;
   int lower_bound3, upper_bound3;
 
-  PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+  // PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
 
-  if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
-  {
-    execute_program(program1, num_lines_program1, &interpreter, lower_bound1 );
-    free(pcb1);
-  }
-  else
-  {
-    printf("Failed to allocate memory for Program 1\n");
-  }
+  // if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
+  // {
+  //   execute_program(program1, num_lines_program1, &interpreter, lower_bound1 );
+  //   free(pcb1);
+  // }
+  // else
+  // {
+  //   printf("Failed to allocate memory for Program 1\n");
+  // }
 
-  PCB *pcb2 = create_pcb(2, lower_bound1, upper_bound1);
-
-  if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2)) {
-    execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
-    free(pcb2);
-  }
-  else
-  {
-    printf("Failed to allocate memory for Program 2\n");
-  }
+  // PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
+  // if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2)) {
+   
+  //   execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
+  //   free(pcb2);
+  // }
+  // else
+  // {
+  //   printf("Failed to allocate memory for Program 2\n");
+  // }
   
-  PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+  // PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
 
-  if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3)) {
-    execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
-    free(pcb3);
-  } 
-  else
-  {
-    printf("Failed to allocate memory for Program 3\n");
-  }
-
-  // Memory[0].Name = "PID:";
-  // Memory[0].Value = "1";
-  // Memory[1].Name = "STATE:";
-  // Memory[1].Value = "READY";
-  // Memory[2].Name = "PC:";
-  // Memory[2].Value = "8";
-  // Memory[3].Name = "Lower_bound:";
-  // Memory[3].Value = "0";  
-  // Memory[4].Name = "Upper_Bound:";
-  // Memory[4].Value = "14";
-  // Memory[5].Name = "Var1:";
-  // Memory[5].Value = NULL;
-  // Memory[6].Name = "Var2:";
-  // Memory[6].Value = NULL;
-  // Memory[7].Name = "Var3:";
-  // Memory[7].Value = NULL;
-  // Memory[8].Name = "INST1:";
-  // Memory[8].Value = "semWait userInput";
-  // Memory[9].Name = "INST2:";
-  // Memory[9].Value = "   a input";
-  // Memory[10].Name = "INST3:";
-  // Memory[10].Value = "assign b input";
-  // Memory[11].Name = "INST4:";
-  // Memory[11].Value = "semSignal userInput";
-  // Memory[12].Name = "INST5:";
-  // Memory[12].Value = "semWait userOutput";
-  // Memory[13].Name = "INST6:";
-  // Memory[13].Value = "printFromTo a b";
-  // Memory[14].Name = "INST7:";
-  // Memory[14].Value = "semSignal userOutput";
+  // if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3)) {
+  //   execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
+  //   free(pcb3);
+  // } 
+  // else
+  // {
+  //   printf("Failed to allocate memory for Program 3\n");
+  // }
+  Memory[0].Name = "PID:";
+  Memory[0].Value = "1";
+  Memory[1].Name = "STATE:";
+  Memory[1].Value = "READY";
+  Memory[2].Name = "PC:";
+  Memory[2].Value = "8";
+  Memory[3].Name = "Lower_bound:";
+  Memory[3].Value = "0";  
+  Memory[4].Name = "Upper_Bound:";
+  Memory[4].Value = "14";
+  Memory[5].Name = "Var1:";
+  Memory[5].Value = NULL;
+  Memory[6].Name = "Var2:";
+  Memory[6].Value = NULL;
+  Memory[7].Name = "Var3:";
+  Memory[7].Value = NULL;
+  Memory[8].Name = "INST1:";
+  Memory[8].Value = "semWait userInput";
+  Memory[9].Name = "INST2:";
+  Memory[9].Value = "assign a input";
+  Memory[10].Name = "INST3:";
+  Memory[10].Value = "assign b input";
+  Memory[11].Name = "INST4:";
+  Memory[11].Value = "semSignal userInput";
+  Memory[12].Name = "INST5:";
+  Memory[12].Value = "semWait userOutput";
+  Memory[13].Name = "INST6:";
+  Memory[13].Value = "printFromTo a b";
+  Memory[14].Name = "INST7:";
+  Memory[14].Value = "semSignal userOutput";
+  // print_memory();
+  
+  execute_program(Memory,&interpreter,lower_bound1,14,8);
   print_memory();
-
+  return 0;
   // store_variable(0,"a","HAMADA");
   // store_variable(0,"b","10");
   // writeFile(Memory[5].Value,Memory[6].Value);
@@ -501,12 +516,12 @@ int main()
   // free_program_lines(program2, num_lines_program2);
   // free_program_lines(program3, num_lines_program3);
 
-  printf("Instructions Array:\n");
-  for (int i = 0; i < 9; i++) {
-    if (instructions[i] != NULL) {
-      printf("Instruction[%d]: %s\n", i, instructions[i]);
-    } else {
-      printf("Instruction[%d]: Empty\n", i);
-    }
-  }
+  // printf("Instructions Array:\n");
+  // for (int i = 0; i < 9; i++) {
+  //   if (instructions[i] != NULL) {
+  //     printf("Instruction[%d]: %s\n", i, instructions[i]);
+  //   } else {
+  //     printf("Instruction[%d]: Empty\n", i);
+  //   }
+  // }
 }
