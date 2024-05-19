@@ -382,7 +382,6 @@ int read_program_file(const char *file_path, char **program)
     instructions[num_lines] = program[num_lines];
     num_lines++;
   }
-
   fclose(file);
   return num_lines;
 }
@@ -436,26 +435,28 @@ int main()
     printf("Failed to allocate memory for Program 1\n");
   }
 
+  PCB *pcb2 = create_pcb(2, lower_bound1, upper_bound1);
 
-  // if (allocate_memory("2", size_needed2, &lower_bound2, &upper_bound2)) {
-  //   PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
-  //   execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
-  //   free(pcb2);
-  // }
-  // else
-  // {
-  //   printf("Failed to allocate memory for Program 2\n");
-  // }
+  if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2)) {
+    execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
+    free(pcb2);
+  }
+  else
+  {
+    printf("Failed to allocate memory for Program 2\n");
+  }
+  
+  PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
 
-  // if (allocate_memory("3", size_needed3, &lower_bound3, &upper_bound3)) {
-  //   PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
-  //   execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
-  //   free(pcb3);
-  // } 
-  // else
-  // {
-  //   printf("Failed to allocate memory for Program 3\n");
-  // }
+  if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3)) {
+    execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
+    free(pcb3);
+  } 
+  else
+  {
+    printf("Failed to allocate memory for Program 3\n");
+  }
+
   // Memory[0].Name = "PID:";
   // Memory[0].Value = "1";
   // Memory[1].Name = "STATE:";
@@ -501,7 +502,7 @@ int main()
   // free_program_lines(program3, num_lines_program3);
 
   printf("Instructions Array:\n");
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 9; i++) {
     if (instructions[i] != NULL) {
       printf("Instruction[%d]: %s\n", i, instructions[i]);
     } else {
