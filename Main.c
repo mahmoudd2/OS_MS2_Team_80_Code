@@ -163,6 +163,11 @@ void store_variable(int lower_bound, char *name, char *value) {
   printf("Memory is full, cannot store %s = %s\n", name, value);
 }
 
+void print (char *str)
+{
+  printf("Printing: %s\n",str);
+}
+
 void printFromTo(char *start_num, char *end_num)
 {
   int start = atoi(start_num);
@@ -375,14 +380,14 @@ int main() {
   Memory[13].Value = "printFromTo a b";
   Memory[14].Name = "INST7:";
   Memory[14].Value = "semSignal userOutput";
-  
+  print_memory();
 
   store_variable(0,"a","HAMADA");
   store_variable(0,"b","10");
   // writeFile(Memory[5].Value,Memory[6].Value);
   printFromTo(Memory[5].Value,Memory[6].Value);
-
-  print_memory();
+  print(Memory[5].Value);
+  
 
   free_program_lines(program1, num_lines_program1);
   free_program_lines(program2, num_lines_program2);
