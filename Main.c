@@ -119,6 +119,43 @@ void print_memory() {
   }
 }
 
+PCB* create_pcb(int process_id, int lower_bound, int upper_bound) {
+    PCB *pcb = (PCB *)malloc(sizeof(PCB));
+    pcb->Pid = process_id;
+    pcb->State = READY;
+    pcb->PC = 0;
+    pcb->memory_lower_bound = lower_bound;
+    pcb->memory_upper_bound = upper_bound;
+    return pcb;
+}
+
+void store_variable(int lower_bound, const char *name, const char *value) {
+    for (int i = lower_bound; i < 60; i++) {
+        if (Memory[i].Name == NULL) {
+            Memory[i].Name = strdup(name);
+            Memory[i].Value = strdup(value);
+            return;
+        }
+    }
+    printf("Memory is full, cannot store %s = %s\n", name, value);
+}
+
+void print_from_to(int start, int end) {
+    if (start < 0 || start >= 60 || end < 0 || end >= 60) {
+        fprintf(stderr, "Error: Invalid range\n");
+        return;
+    }
+
+    for (int num = start; num <= end; num++) {
+        if (Memory[num].Name != NULL && Memory[num].Value != NULL) {
+            printf("%s = %s\n", Memory[num].Name, Memory[num].Value);
+        } else {
+            printf("Memory[%d]: Empty\n", num);
+        }
+    }
+}
+
+
 void execute_line(char *line, Interpreter *interpreter, int lower_bound) {
   if (line == NULL) {
     fprintf(stderr, "Error: Null pointer encountered\n");
