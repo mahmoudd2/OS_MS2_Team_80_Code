@@ -283,15 +283,9 @@ void printFromTo(char *start_num, char *end_num)
 void writeFile(char *name, char *data,int lower_bound, int upper_bound) {
   // Find the filename in memory
   char *filename = NULL;
-  char *value = NULL;
   for (int i = lower_bound + 5; i < upper_bound; i++) {
     if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {   // leh kanet mktoba "a"
       filename = Memory[i].Value;
-      break;
-    }
-    if (Memory[i].Name != NULL && strcmp(Memory[i].Name,data) == 0)
-    {
-      value = Memory[i].Value;
       break;
     }
   }
@@ -309,12 +303,8 @@ void writeFile(char *name, char *data,int lower_bound, int upper_bound) {
     return;
   }
   
-  if (value == NULL)
-  {
-    printf("el value fady");
-  }
   // Write data to file
-  if (fputs(value, file) == EOF) {
+  if (fputs(data, file) == EOF) {
     printf("Error writing to file\n");
     fclose(file);
     return;
@@ -398,10 +388,19 @@ void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound,int
   else if (strcmp(token, "writeFile") == 0)
   {
     char *fileName = strtok(NULL, " ");
-    char *value = strtok(NULL, " ");
-    if (fileName != NULL && value != NULL)
+    char *value_str = strtok(NULL, " ");
+    if (fileName != NULL && value_str != NULL)
     {
-      writeFile(fileName,value,lower_bound,upper_bound);
+      char *value = get_value_from_memory(value_str);
+      printf("VALUEEE:: %s\n", value);
+
+      if (fileName != NULL && value != NULL)
+      {
+        writeFile(fileName,value,lower_bound,upper_bound);
+      }
+    }
+    else {
+      fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
     }
   }
   else
