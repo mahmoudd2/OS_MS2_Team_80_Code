@@ -350,6 +350,16 @@ char* get_value_from_memory(const char* name) {
   return NULL;
 }
 
+char* get_value_from_memory_L_U(const char* name, int lower_bound, int upper_bound) {
+  for (int i = lower_bound; i <= upper_bound; i++) {
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {
+      return Memory[i].Value;
+    }
+  }
+  return NULL;
+}
+
+
 void printFromTo(char *start_num, char *end_num)
 {
   int start = atoi(start_num);
@@ -363,35 +373,24 @@ void printFromTo(char *start_num, char *end_num)
   printf("\n\n");
 }
 
-char* readFile(char *str) {
-  // Find the filename in memory
-  char *filename = NULL;
-  for (int i = 0; i < 60; i++) {
-    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, str) == 0) {
-      filename = Memory[i].Value;
-      break;
-    }
-  }
+char* readFile(char *str, int lower_bound, int upper_bound) {
+  char *filename = get_value_from_memory_L_U(str, lower_bound, upper_bound);
 
-  // If filename is not found, return NULL
   if (filename == NULL) {
     printf("Error: Filename not found in memory.\n");
     return NULL;
   }
 
-  // Open file for reading ("r" mode)
   FILE *file = fopen(filename, "r");
   if (file == NULL) {
     printf("Error opening file\n");
     return NULL;
   }
 
-  // Determine the size of the file
   fseek(file, 0, SEEK_END);
   long file_size = ftell(file);
   fseek(file, 0, SEEK_SET);
 
-  // Allocate memory for the file contents
   char *file_contents = (char *)malloc(file_size + 1);
   if (file_contents == NULL) {
     printf("Memory allocation failed\n");
@@ -399,18 +398,14 @@ char* readFile(char *str) {
     return NULL;
   }
 
-  // Read the file contents into the allocated memory
   fread(file_contents, 1, file_size, file);
   file_contents[file_size] = '\0';
 
-  // Close the file
-  if (fclose(file) != 0) {
-    printf("Error closing file\n");
-  }
+  fclose(file);
 
-  // Return the file contents
   return file_contents;
 }
+
 
 void writeFile(char *name, char *data,int lower_bound, int upper_bound) {
   // Find the filename in memory
@@ -498,8 +493,11 @@ void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound,int
     else if (strcmp(value_type, "readFile") == 0) 
     {
       char *file_var_name = strtok(NULL, " ");
+      printf("EL FILEEEE esmo: %s\n\n",file_var_name);
+
       if (file_var_name != NULL) {
-        char *file_contents = readFile(file_var_name);
+        char *file_contents = readFile(file_var_name,lower_bound,upper_bound);
+        printf("EL FILEEEE: %s\n\n",file_contents);
         if (file_contents != NULL) {
           store_variable(lower_bound, var_name, file_contents);
           free(file_contents); // Free the allocated memory for file contents
@@ -535,8 +533,8 @@ void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound,int
     char *value_str = strtok(NULL, " ");
     if (fileName != NULL && value_str != NULL)
     {
-      char *value = get_value_from_memory(value_str);
-      // printf("VALUEEE:: %s\n", value);
+      char *value = get_value_from_memory_L_U(value_str,lower_bound,upper_bound);
+      printf("VALUEEE:: %s\n", value);
 
       if (fileName != NULL && value != NULL)
       {
@@ -552,14 +550,14 @@ void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound,int
     char *fileName = strtok(NULL, " ");
     if (fileName != NULL)
     {
-      char * temp = readFile(fileName);
+      char * temp = readFile(fileName,lower_bound,upper_bound);
       printf("Readfile returns: %s\n\n",temp);
     }
   }
-  else
-  {
-    printf("mfesh haga\n");
-  }
+  // else
+  // {
+  //   printf("mfesh haga\n");
+  // }
 }
 
 void execute_program(MemoryWord *Memory, Interpreter *interpreter, int lower_bound, int upper_bound,int pc)
