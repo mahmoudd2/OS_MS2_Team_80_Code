@@ -103,7 +103,7 @@ const char *process_state_to_string(ProcessState state)
   }
 }
 
-int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_bound, int *upper_bound)
+int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_bound, int *upper_bound, char **pragram)
 {
   for (int i = 0; i <= 60 - size_needed; i++)
   {
@@ -149,12 +149,12 @@ int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_boun
         Memory[i + 5 + k].Name = strdup("Variable");
         Memory[i + 5 + k].Value = strdup("");
       }
-      // int temp = 0;
-      for (int j = 8; j < size_needed; j++)
+      int temp = 0;
+      for (int r = 8; r < size_needed; r++)
       {
-        Memory[i + j].Name = strdup("Instruction");
-        Memory[i + j].Value = strdup("");
-        // temp++;
+        Memory[r + i].Name = strdup("Instruction");
+        Memory[r + i].Value = strdup(pragram[temp]);
+        temp++;
       }
       return 1;
     }
@@ -163,14 +163,39 @@ int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_boun
 }
 void store_variable(int lower_bound, char *name, char *value) {
   int var_bound = lower_bound + 8;  // Start from 8 as instructions start from 8.
+  int found = 0;
+
+  // First, check if the variable already exists and update its value.
   for (int i = lower_bound + 5; i < var_bound; i++) {
-    if (Memory[i].Value == NULL || strcmp(Memory[i].Name, name) == 0) {
-      Memory[i].Name = strdup(name);
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {
+      free(Memory[i].Value);  // Free the old value
       Memory[i].Value = strdup(value);
-      return;
+      found = 1;
+      break;
     }
   }
-  printf("Memory is full, cannot store %s = %s\n", name, value);
+
+  // If the variable was not found, find an empty slot and store the new variable.
+  if (!found) {
+    for (int i = lower_bound + 5; i < var_bound; i++) {
+      if (Memory[i].Value == NULL || strcmp(Memory[i].Value, "") == 0) {
+        if (Memory[i].Name != NULL) {
+          free(Memory[i].Name);
+        }
+        Memory[i].Name = strdup(name);
+        if (Memory[i].Value != NULL) {
+          free(Memory[i].Value);
+        }
+        Memory[i].Value = strdup(value);
+        return;
+      }
+    }
+  }
+
+  // If no empty slot is found, print an error message.
+  if (!found) {
+    printf("Memory is full, cannot store %s = %s\n", name, value);
+  }
 }
 
 
@@ -393,7 +418,7 @@ int read_program_file(const char *file_path, char **program)
     program[num_lines] = strdup(line);
     instructions[num_lines] = program[num_lines];
     num_lines++;
-  }
+  } 
 
   fclose(file);
   return num_lines;
@@ -436,69 +461,69 @@ int main()
   int lower_bound2, upper_bound2;
   int lower_bound3, upper_bound3;
 
-  // PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+  PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
 
-  // if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
-  // {
-  //   execute_program(program1, num_lines_program1, &interpreter, lower_bound1 );
-  //   free(pcb1);
-  // }
-  // else
-  // {
-  //   printf("Failed to allocate memory for Program 1\n");
-  // }
+  if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1,program1))
+  {
+    execute_program(Memory, &interpreter, lower_bound1,upper_bound1,8);
+    free(pcb1);
+  }
+  else
+  {
+    printf("Failed to allocate memory for Program 1\n");
+  }
 
-  // PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
-  // if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2)) {
+  PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
+  if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2,program2)) {
    
-  //   execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
-  //   free(pcb2);
-  // }
-  // else
-  // {
-  //   printf("Failed to allocate memory for Program 2\n");
-  // }
+    execute_program(Memory, &interpreter, lower_bound2,upper_bound2,23);
+    free(pcb2);
+  }
+  else
+  {
+    printf("Failed to allocate memory for Program 2\n");
+  }
   
-  // PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+  PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
 
-  // if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3)) {
-  //   execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
-  //   free(pcb3);
-  // } 
-  // else
-  // {
-  //   printf("Failed to allocate memory for Program 3\n");
-  // }
-  Memory[0].Name = "PID:";
-  Memory[0].Value = "1";
-  Memory[1].Name = "STATE:";
-  Memory[1].Value = "READY";
-  Memory[2].Name = "PC:";
-  Memory[2].Value = "8";
-  Memory[3].Name = "Lower_bound:";
-  Memory[3].Value = "0";  
-  Memory[4].Name = "Upper_Bound:";
-  Memory[4].Value = "14";
-  Memory[5].Name = "Var1:";
-  Memory[5].Value = NULL;
-  Memory[6].Name = "Var2:";
-  Memory[6].Value = NULL;
-  Memory[7].Name = "Var3:";
-  Memory[7].Value = NULL;
-  Memory[8].Name = "INST1:";
-  Memory[8].Value = "semWait userInput";
-  Memory[9].Name = "INST2:";
-  Memory[9].Value = "assign a input";
-  Memory[10].Name = "INST3:";
-  Memory[10].Value = "assign b input";
-  Memory[11].Name = "INST4:";
-  Memory[11].Value = "semSignal userInput";
-  Memory[12].Name = "INST5:";
-  Memory[12].Value = "semWait userOutput";
-  Memory[13].Name = "INST6:";
-  Memory[13].Value = "printFromTo a b";
-  Memory[14].Name = "INST7:";
-  Memory[14].Value = "semSignal userOutput";
+  if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3,program3)) {
+    execute_program(Memory, &interpreter, lower_bound3,upper_bound3,38);
+    free(pcb3);
+  } 
+  else
+  {
+    printf("Failed to allocate memory for Program 3\n");
+  }
+  // Memory[0].Name = "PID:";
+  // Memory[0].Value = "1";
+  // Memory[1].Name = "STATE:";
+  // Memory[1].Value = "READY";
+  // Memory[2].Name = "PC:";
+  // Memory[2].Value = "8";
+  // Memory[3].Name = "Lower_bound:";
+  // Memory[3].Value = "0";  
+  // Memory[4].Name = "Upper_Bound:";
+  // Memory[4].Value = "14";
+  // Memory[5].Name = "Var1:";
+  // Memory[5].Value = NULL;
+  // Memory[6].Name = "Var2:";
+  // Memory[6].Value = NULL;
+  // Memory[7].Name = "Var3:";
+  // Memory[7].Value = NULL;
+  // Memory[8].Name = "INST1:";
+  // Memory[8].Value = "semWait userInput";
+  // Memory[9].Name = "INST2:";
+  // Memory[9].Value = "assign a input";
+  // Memory[10].Name = "INST3:";
+  // Memory[10].Value = "assign b input";
+  // Memory[11].Name = "INST4:";
+  // Memory[11].Value = "semSignal userInput";
+  // Memory[12].Name = "INST5:";
+  // Memory[12].Value = "semWait userOutput";
+  // Memory[13].Name = "INST6:";
+  // Memory[13].Value = "printFromTo a b";
+  // Memory[14].Name = "INST7:";
+  // Memory[14].Value = "semSignal userOutput";
   // print_memory();
   
   execute_program(Memory,&interpreter,lower_bound1,14,8);
@@ -525,3 +550,7 @@ int main()
   //   }
   // }
 }
+
+
+//print w printfromto w assign w writefile shagalen fol 
+// na2es at2kd mn read file w a3ml semwait w semsignal
