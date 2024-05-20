@@ -5,10 +5,12 @@
 
 #define MAX_LINES 1000
 #define MAX_LINE_LENGTH 1000
-// #define MAX_PROCESS 1000
+#define MAX_PROCESSES 3
+#define TIME_QUANTUM 2
 // #define MAX_QUEUE_SIZE 100
 #define MAX_INSTRUCTIONS 8
 
+int flag = 0;
 char *instructions[100];
 int PC = 0;
 int lower_bound;
@@ -60,6 +62,7 @@ typedef struct
   int PC;
   int memory_lower_bound;
   int memory_upper_bound;
+  int arrival_time;
 } PCB;
 
 typedef struct
@@ -79,13 +82,66 @@ void initialize_memory()
   }
 }
 
-// typedef struct
-// {
-//   PCB *processes[MAX_QUEUE_SIZE];
-//   int front;
-//   int rear;
-//   int size;
-// } Queue;
+typedef struct {
+  int pid;
+  int burst_time;
+  int remaining_time;
+  // int arrival_time;
+  ProcessState state;
+} Process;
+
+typedef struct {
+  Process *queue[MAX_PROCESSES];
+  int front;
+  int rear;
+  int size;
+} Queue;
+
+void enqueue(Queue *q, Process *process) {
+  if (q->size == MAX_PROCESSES) {
+    printf("Queue is full, cannot enqueue process.\n");
+    return;
+  }
+  q->rear = (q->rear + 1) % MAX_PROCESSES;
+  q->queue[q->rear] = process;
+  q->size++;
+}
+
+Process *dequeue(Queue *q) {
+  if (q->size == 0) {
+    printf("Queue is empty, cannot dequeue process.\n");
+    return NULL;
+  }
+  Process *process = q->queue[q->front];
+  q->front = (q->front + 1) % MAX_PROCESSES;
+  q->size--;
+  return process;
+}
+
+void round_robin_scheduler(Queue *ready_queue) {
+  while (ready_queue->size > 0) {
+    Process *current_process = dequeue(ready_queue);
+    if (current_process->remaining_time > TIME_QUANTUM) {
+      current_process->state = RUNNING;
+      printf("Process %d is running for %d time units.\n", current_process->pid, TIME_QUANTUM);
+      current_process->remaining_time -= TIME_QUANTUM;
+      enqueue(ready_queue, current_process); // Re-enqueue the process for future execution
+    } else {
+      current_process->state = RUNNING;
+      printf("Process %d is running for %d time units.\n", current_process->pid, current_process->remaining_time);
+      current_process->remaining_time = 0;
+      printf("Process %d has terminated.\n", current_process->pid);
+    }
+    // Free memory only if the process has completed execution
+    if (current_process->remaining_time == 0) {
+      current_process->state = TERMINATED;
+      free(current_process); // Free memory allocated to the terminated process
+    }
+  }
+}
+
+
+
 const char *process_state_to_string(ProcessState state)
 {
   switch (state)
@@ -316,7 +372,7 @@ void allocate_memory(PCB *pcb, char *process_id, int size_needed, int lower_boun
   }
 }
 
-PCB *create_pcb(int process_id, int lower_bound, int upper_bound) {
+PCB *create_pcb(int process_id, int lower_bound, int upper_bound,int arrival_time) {
   // Allocate memory for a new PCB
   PCB *pcb = (PCB *)malloc(sizeof(PCB));
   pcb->Pid = process_id;
@@ -324,9 +380,18 @@ PCB *create_pcb(int process_id, int lower_bound, int upper_bound) {
   pcb->PC = lower_bound + 8;  // Initialize PC to the start of the instructions
   pcb->memory_lower_bound = lower_bound;
   pcb->memory_upper_bound = upper_bound;
+  pcb->arrival_time = arrival_time; // Initialize arrival time
   return pcb;
 }
 
+Process *create_process(PCB *pcb) {
+  Process *process = (Process *)malloc(sizeof(Process));
+  process->pid = pcb->Pid;
+  process->burst_time = pcb->memory_upper_bound - pcb->memory_lower_bound + 1; // Assuming each instruction takes one time unit
+  process->remaining_time = process->burst_time;
+  process->state = READY;
+  return process;
+}
 
 // PCB *create_pcb(int process_id, int lower_bound, int upper_bound)
 // {
@@ -564,8 +629,7 @@ void execute_program(MemoryWord *Memory, Interpreter *interpreter, int lower_bou
 {
   for (int i = pc; i < upper_bound; i++)
   {
-    execute_line(Memory, interpreter, lower_bound,upper_bound,pc);
-    pc++;
+    execute_line(Memory, interpreter, lower_bound, upper_bound, i); // Use `i` as PC
   }
 }
 
@@ -603,7 +667,79 @@ void free_program_lines(char **program, int num_lines)
   }
 }
 
-int main() {
+// int main() {
+//   Interpreter interpreter;
+//   mutex_init(&interpreter.user_input_mutex);
+//   mutex_init(&interpreter.user_output_mutex);
+//   mutex_init(&interpreter.file_mutex);
+
+//   initialize_memory();
+
+//   char *program1_path = "program1.txt";
+//   char *program2_path = "program2.txt";
+//   char *program3_path = "program3.txt";
+
+//   char *program1[MAX_LINES];
+//   char *program2[MAX_LINES];
+//   char *program3[MAX_LINES];
+
+//   int lower_bound1 = 0, upper_bound1 = 0;
+//   int lower_bound2, upper_bound2;
+//   int lower_bound3, upper_bound3;
+
+//   Queue ready_queue;
+//   ready_queue.front = 0;
+//   ready_queue.rear = -1;
+//   ready_queue.size = 0;
+
+//   int num_lines_program1 = read_program_file(program1_path, program1);
+//   int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
+
+//   int num_lines_program2 = read_program_file(program2_path, program2);
+//   int size_needed2 = num_lines_program2 + 3 + 5;
+
+//   int num_lines_program3 = read_program_file(program3_path, program3);
+//   int size_needed3 = num_lines_program3 + 3 + 5;
+
+//   int burst_times[] = {num_lines_program1, num_lines_program2, num_lines_program3};  // Example burst times for processes
+
+
+
+//   if (calculate_memory_bounds(size_needed1, &lower_bound1, &upper_bound1)) {
+//     PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+//     allocate_memory(pcb1, "1", size_needed1, lower_bound1, upper_bound1, program1);
+//     execute_program(Memory, &interpreter, lower_bound1, upper_bound1, pcb1->PC);
+//     free(pcb1);
+//   } else {
+//     printf("Failed to allocate memory for Program 1\n");
+//   }
+
+
+//   if (calculate_memory_bounds(size_needed2, &lower_bound2, &upper_bound2)) {
+//     PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
+//     allocate_memory(pcb2, "2", size_needed2, lower_bound2, upper_bound2, program2);
+//     execute_program(Memory, &interpreter, lower_bound2, upper_bound2, pcb2->PC);
+//     free(pcb2);
+//   } else {
+//     printf("Failed to allocate memory for Program 2\n");
+//   }
+
+
+//   if (calculate_memory_bounds(size_needed3, &lower_bound3, &upper_bound3)) {
+//     PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+//     allocate_memory(pcb3, "3", size_needed3, lower_bound3, upper_bound3, program3);
+//     execute_program(Memory, &interpreter, lower_bound3, upper_bound3, pcb3->PC);
+//     free(pcb3);
+//   } else {
+//     printf("Failed to allocate memory for Program 3\n");
+//   }
+
+//   print_memory();
+//   return 0;
+// }
+
+int main()
+{
   Interpreter interpreter;
   mutex_init(&interpreter.user_input_mutex);
   mutex_init(&interpreter.user_output_mutex);
@@ -623,41 +759,101 @@ int main() {
   int lower_bound2, upper_bound2;
   int lower_bound3, upper_bound3;
 
+  Queue ready_queue;
+  ready_queue.front = 0;
+  ready_queue.rear = -1;
+  ready_queue.size = 0;
+
+  // Read program files
   int num_lines_program1 = read_program_file(program1_path, program1);
   int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
-
-  if (calculate_memory_bounds(size_needed1, &lower_bound1, &upper_bound1)) {
-    PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
-    allocate_memory(pcb1, "1", size_needed1, lower_bound1, upper_bound1, program1);
-    execute_program(Memory, &interpreter, lower_bound1, upper_bound1, pcb1->PC);
-    free(pcb1);
-  } else {
-    printf("Failed to allocate memory for Program 1\n");
-  }
 
   int num_lines_program2 = read_program_file(program2_path, program2);
   int size_needed2 = num_lines_program2 + 3 + 5;
 
-  if (calculate_memory_bounds(size_needed2, &lower_bound2, &upper_bound2)) {
-    PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
-    allocate_memory(pcb2, "2", size_needed2, lower_bound2, upper_bound2, program2);
-    execute_program(Memory, &interpreter, lower_bound2, upper_bound2, pcb2->PC);
-    free(pcb2);
-  } else {
-    printf("Failed to allocate memory for Program 2\n");
-  }
-
   int num_lines_program3 = read_program_file(program3_path, program3);
   int size_needed3 = num_lines_program3 + 3 + 5;
 
-  if (calculate_memory_bounds(size_needed3, &lower_bound3, &upper_bound3)) {
-    PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
-    allocate_memory(pcb3, "3", size_needed3, lower_bound3, upper_bound3, program3);
-    execute_program(Memory, &interpreter, lower_bound3, upper_bound3, pcb3->PC);
-    free(pcb3);
-  } else {
-    printf("Failed to allocate memory for Program 3\n");
+  int burst_times[] = {num_lines_program1, num_lines_program2, num_lines_program3}; // Example burst times for processes
+  int arrival_times[] = {0, 3, 6};                                                   // Arrival times for processes (user input)
+
+
+  int clk = 0;
+  while (flag == 0)
+  {
+    
+
   }
+
+  // Main clock cycle
+  // int current_time = 0;
+  // while (1)
+  // {
+  //   for (int i = 0; i < MAX_PROCESSES; i++)
+  //   {
+  //     if (arrival_times[i] == current_time)
+  //     {
+  //       printf("Process %d has arrived at time %d.\n", i + 1, current_time);
+  //       // Allocate memory for the process
+  //       switch (i)
+  //       {
+  //       case 0:
+  //         if (calculate_memory_bounds(size_needed1, &lower_bound1, &upper_bound1))
+  //         {
+  //           PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1,arrival_times[0]);
+  //           allocate_memory(pcb1, "1", size_needed1, lower_bound1, upper_bound1, program1);
+  //           enqueue(&ready_queue, create_process(pcb1));
+  //         }
+  //         else
+  //         {
+  //           printf("Failed to allocate memory for Program 1\n");
+  //         }
+  //         break;
+  //       case 1:
+  //         if (calculate_memory_bounds(size_needed2, &lower_bound2, &upper_bound2))
+  //         {
+  //           PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2,arrival_times[1]);
+  //           allocate_memory(pcb2, "2", size_needed2, lower_bound2, upper_bound2, program2);
+  //           enqueue(&ready_queue, create_process(pcb2));
+  //         }
+  //         else
+  //         {
+  //           printf("Failed to allocate memory for Program 2\n");
+  //         }
+  //         break;
+  //       case 2:
+  //         if (calculate_memory_bounds(size_needed3, &lower_bound3, &upper_bound3))
+  //         {
+  //           PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3,arrival_times[2]);
+  //           allocate_memory(pcb3, "3", size_needed3, lower_bound3, upper_bound3, program3);
+  //           enqueue(&ready_queue, create_process(pcb3));
+  //         }
+  //         else
+  //         {
+  //           printf("Failed to allocate memory for Program 3\n");
+  //         }
+  //         break;
+  //       }
+  //     }
+  //   }
+
+  //   // Run processes in the ready queue
+  //   if (ready_queue.size > 0)
+  //   {
+  //     printf("Running processes at time %d.\n", current_time);
+  //     round_robin_scheduler(&ready_queue);
+  //   }
+
+  //   // Increment time
+  //   current_time++;
+
+  //   // Check if all processes have terminated
+  //   if (ready_queue.size == 0 && current_time > burst_times[MAX_PROCESSES - 1])
+  //   {
+  //     printf("All processes have terminated.\n");
+  //     break;
+  //   }
+  // }
 
   print_memory();
   return 0;
