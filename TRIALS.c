@@ -280,12 +280,18 @@ void printFromTo(char *start_num, char *end_num)
   printf("\n\n");
 }
 
-void writeFile(char *name, char *data) {
+void writeFile(char *name, char *data,int lower_bound, int upper_bound) {
   // Find the filename in memory
   char *filename = NULL;
-  for (int i = 0; i < 60; i++) {
+  char *value = NULL;
+  for (int i = lower_bound + 5; i < upper_bound; i++) {
     if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {   // leh kanet mktoba "a"
       filename = Memory[i].Value;
+      break;
+    }
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name,data) == 0)
+    {
+      value = Memory[i].Value;
       break;
     }
   }
@@ -302,9 +308,13 @@ void writeFile(char *name, char *data) {
     printf("Error opening file\n");
     return;
   }
-
+  
+  if (value == NULL)
+  {
+    printf("el value fady");
+  }
   // Write data to file
-  if (fputs(data, file) == EOF) {
+  if (fputs(value, file) == EOF) {
     printf("Error writing to file\n");
     fclose(file);
     return;
@@ -332,7 +342,7 @@ void print (char *var_name)
 
 
 
-void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound, int PC) {
+void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound,int upper_bound, int PC) {
   if (Mem[PC].Value == NULL) {
     fprintf(stderr, "Error: Null pointer encountered at PC %d\n", PC);
     return;
@@ -384,7 +394,18 @@ void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound, in
     if (var_name != NULL) {
       print(var_name);
     }
-  } else {
+  }
+  else if (strcmp(token, "writeFile") == 0)
+  {
+    char *fileName = strtok(NULL, " ");
+    char *value = strtok(NULL, " ");
+    if (fileName != NULL && value != NULL)
+    {
+      writeFile(fileName,value,lower_bound,upper_bound);
+    }
+  }
+  else
+  {
     printf("mfesh haga\n");
   }
 }
@@ -393,7 +414,7 @@ void execute_program(MemoryWord *Memory, Interpreter *interpreter, int lower_bou
 {
   for (int i = pc; i < upper_bound; i++)
   {
-    execute_line(Memory, interpreter, lower_bound,pc);
+    execute_line(Memory, interpreter, lower_bound,upper_bound,pc);
     pc++;
   }
 }
@@ -419,7 +440,7 @@ int read_program_file(const char *file_path, char **program)
     instructions[num_lines] = program[num_lines];
     num_lines++;
   } 
-
+  printf(" program is read\n");
   fclose(file);
   return num_lines;
 }
@@ -449,17 +470,14 @@ int main()
   char *program2[MAX_LINES];
   char *program3[MAX_LINES];
 
-  int num_lines_program1 = read_program_file(program1_path, program1);
-  int num_lines_program2 = read_program_file(program2_path, program2);
-  int num_lines_program3 = read_program_file(program3_path, program3);
 
-  int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
-  int size_needed2 = num_lines_program2 + 3 + 5;
-  int size_needed3 = num_lines_program3 + 3 + 5;
 
   int lower_bound1 = 0, upper_bound1 = 0;
   int lower_bound2, upper_bound2;
   int lower_bound3, upper_bound3;
+
+  int num_lines_program1 = read_program_file(program1_path, program1);
+  int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
 
   PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
 
@@ -472,6 +490,11 @@ int main()
   {
     printf("Failed to allocate memory for Program 1\n");
   }
+  print_memory();
+
+
+  int num_lines_program2 = read_program_file(program2_path, program2);
+  int size_needed2 = num_lines_program2 + 3 + 5;
 
   PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
   if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2,program2)) {
@@ -484,16 +507,19 @@ int main()
     printf("Failed to allocate memory for Program 2\n");
   }
   
-  PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+  // int num_lines_program3 = read_program_file(program3_path, program3);
+  // int size_needed3 = num_lines_program3 + 3 + 5;
 
-  if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3,program3)) {
-    execute_program(Memory, &interpreter, lower_bound3,upper_bound3,38);
-    free(pcb3);
-  } 
-  else
-  {
-    printf("Failed to allocate memory for Program 3\n");
-  }
+  // PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+
+  // if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3,program3)) {
+  //   execute_program(Memory, &interpreter, lower_bound3,upper_bound3,38);
+  //   free(pcb3);
+  // } 
+  // else
+  // {
+  //   printf("Failed to allocate memory for Program 3\n");
+  // }
   // Memory[0].Name = "PID:";
   // Memory[0].Value = "1";
   // Memory[1].Name = "STATE:";
@@ -526,7 +552,7 @@ int main()
   // Memory[14].Value = "semSignal userOutput";
   // print_memory();
   
-  execute_program(Memory,&interpreter,lower_bound1,14,8);
+  // execute_program(Memory,&interpreter,lower_bound1,14,8);
   print_memory();
   return 0;
   // store_variable(0,"a","HAMADA");
