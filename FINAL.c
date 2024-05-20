@@ -9,7 +9,6 @@
 // #define MAX_QUEUE_SIZE 100
 #define MAX_INSTRUCTIONS 8
 #define MAX_QUEUE_SIZE 100
-
 char *instructions[100];
 
 // Define Mutex structure
@@ -184,7 +183,7 @@ void store_variable(int lower_bound, char *name, char *value)
   printf("Memory is full, cannot store %s = %s\n", name, value);
 }
 
-void deallocate_memory(int lower_bound, int upper_bound)
+/*void deallocate_memory(int lower_bound, int upper_bound)
 {
   for (int i = lower_bound; i <= upper_bound; i++)
   {
@@ -193,7 +192,22 @@ void deallocate_memory(int lower_bound, int upper_bound)
     Memory[i].Name = NULL;
     Memory[i].Value = NULL;
   }
+}*/
+void deallocate_memory(int lower_bound, int upper_bound)
+{
+  for (int i = lower_bound; i <= upper_bound; i++)
+  {
+    if (Memory[i].Name != NULL) {
+      free(Memory[i].Name); // Free dynamically allocated memory
+      Memory[i].Name = NULL;
+    }
+    if (Memory[i].Value != NULL) {
+      free(Memory[i].Value); // Free dynamically allocated memory
+      Memory[i].Value = NULL;
+    }
+  }
 }
+
 
 void print_memory()
 {
@@ -259,15 +273,6 @@ void printFromTo(char *start_num, char *end_num)
   }
   printf("\n");
 }
-void enqueue(Queue *q, PCB *process) {
-    if (q->size == MAX_QUEUE_SIZE) {
-        printf("Queue is full\n");
-        return;
-    }
-    q->rear = (q->rear + 1) % MAX_QUEUE_SIZE;
-    q->processes[q->rear] = process;
-    q->size++;
-}
 
 void writeFile(char *name, char *data) {
   // Find the filename in memory
@@ -310,7 +315,34 @@ void print (char *var_name)
   char *value = get_value_from_memory(var_name);
   printf("%s = %s\n",var_name,value);
 }
+void enqueue(Queue *q, PCB *process) {
+    if (q->size == MAX_QUEUE_SIZE) {
+        printf("Queue is full\n");
+        return;
+    }
+    q->rear = (q->rear + 1) % MAX_QUEUE_SIZE;
+    q->processes[q->rear] = process;
+    q->size++;
+}
+void print_queue(Queue *q)
+{
+    printf("Queue size: %d\n", q->size);
+    for (int i = 0; i < q->size; i++)
+    {
+        int index = (q->front + i) % MAX_QUEUE_SIZE;
+        PCB *process = q->processes[index];
+        printf("Process ID: %d, State: %s, PC: %d, Memory bounds: [%d, %d]\n",
+               process->Pid, process_state_to_string(process->State), process->PC,
+               process->memory_lower_bound, process->memory_upper_bound);
+    }
+}
 
+void init_queue(Queue *q)
+{
+    q->front = 0;
+    q->rear = MAX_QUEUE_SIZE - 1;
+    q->size = 0;
+}
 
 
 void execute_line(char *line, Interpreter *interpreter, int lower_bound)
@@ -424,7 +456,6 @@ int read_program_file(const char *file_path, char **program)
     instructions[num_lines] = program[num_lines];
     num_lines++;
   }
-
   fclose(file);
   return num_lines;
 }
@@ -437,6 +468,7 @@ void free_program_lines(char **program, int num_lines)
   }
 }
 
+
 int main()
 {
   Interpreter interpreter;
@@ -445,8 +477,9 @@ int main()
   mutex_init(&interpreter.file_mutex);
 
   initialize_memory();
-  
 
+  ready_queue = (Queue *)malloc(sizeof(Queue));
+  init_queue(ready_queue);
   char *program1_path = "program1.txt";
   char *program2_path = "program2.txt";
   char *program3_path = "program3.txt";
@@ -471,7 +504,7 @@ int main()
 
   if (allocate_memory(pcb1, "1", size_needed1, &lower_bound1, &upper_bound1))
   {
-    execute_program_with_round_robin(program1, num_lines_program1, &interpreter, lower_bound1 );
+    execute_program_with_round_robin(pcb1,program1,num_lines_program1,&interpreter);
     free(pcb1);
   }
   else
@@ -479,25 +512,28 @@ int main()
     printf("Failed to allocate memory for Program 1\n");
   }
 
-  PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
-   if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2))
-    {
-      execute_program(program2, num_lines_program2, &interpreter, lower_bound2);
-      free(pcb2);
-   }
-   else
-   {
-     printf("Failed to allocate memory for Program 2\n");
-   }
+  PCB *pcb2 = create_pcb(2, lower_bound1, upper_bound1);
+
+  if (allocate_memory(pcb2,"2", size_needed2, &lower_bound2, &upper_bound2)) {
+    execute_program_with_round_robin(pcb2,program2, num_lines_program2, &interpreter);
+    free(pcb2);
+  }
+  else
+  {
+    printf("Failed to allocate memory for Program 2\n");
+  }
+  
   PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
-   if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3)) {
-   execute_program(program3, num_lines_program3, &interpreter, lower_bound3);
-   free(pcb3);
-   } 
-   else
-   {
-     printf("Failed to allocate memory for Program 3\n");
-   }
+
+  if (allocate_memory(pcb3,"3", size_needed3, &lower_bound3, &upper_bound3)) {
+    execute_program_with_round_robin(pcb3,program3, num_lines_program3, &interpreter);
+    free(pcb3);
+  } 
+  else
+  {
+    printf("Failed to allocate memory for Program 3\n");
+  }
+
   // Memory[0].Name = "PID:";
   // Memory[0].Value = "1";
   // Memory[1].Name = "STATE:";
@@ -543,7 +579,7 @@ int main()
   // free_program_lines(program3, num_lines_program3);
 
   printf("Instructions Array:\n");
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 9; i++) {
     if (instructions[i] != NULL) {
       printf("Instruction[%d]: %s\n", i, instructions[i]);
     } else {
