@@ -103,7 +103,7 @@ const char *process_state_to_string(ProcessState state)
   }
 }
 
-int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_bound, int *upper_bound, char **pragram)
+int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_bound, int *upper_bound, char **program)
 {
   for (int i = 0; i <= 60 - size_needed; i++)
   {
@@ -146,14 +146,14 @@ int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_boun
 
       for (int k = 0; k < 3; k++)
       {
-        Memory[i + 5 + k].Name = strdup("Variable");
-        Memory[i + 5 + k].Value = strdup("");
+        Memory[i + 5 + k].Name = NULL;
+        Memory[i + 5 + k].Value = NULL;
       }
       int temp = 0;
       for (int r = 8; r < size_needed; r++)
       {
         Memory[r + i].Name = strdup("Instruction");
-        Memory[r + i].Value = strdup(pragram[temp]);
+        Memory[r + i].Value = strdup(program[temp]);
         temp++;
       }
       return 1;
@@ -251,7 +251,7 @@ PCB *create_pcb(int process_id, int lower_bound, int upper_bound)
   PCB *pcb = (PCB *)malloc(sizeof(PCB));
   pcb->Pid = process_id;
   pcb->State = READY;
-  pcb->PC = 0;
+  pcb->PC = lower_bound+ 8;
   pcb->memory_lower_bound = lower_bound;
   pcb->memory_upper_bound = upper_bound;
   return pcb;
@@ -284,7 +284,7 @@ void writeFile(char *name, char *data) {
   // Find the filename in memory
   char *filename = NULL;
   for (int i = 0; i < 60; i++) {
-    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, "a") == 0) {
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {   // leh kanet mktoba "a"
       filename = Memory[i].Value;
       break;
     }
