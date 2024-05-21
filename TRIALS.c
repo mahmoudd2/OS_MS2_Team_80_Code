@@ -10,6 +10,7 @@
 // #define MAX_QUEUE_SIZE 100
 #define MAX_INSTRUCTIONS 8
 
+int clk = 0;
 int flag = 0;
 char *instructions[100];
 int PC = 0;
@@ -62,7 +63,7 @@ typedef struct
   int PC;
   int memory_lower_bound;
   int memory_upper_bound;
-  int arrival_time;
+  // int arrival_time;
 } PCB;
 
 typedef struct
@@ -86,7 +87,7 @@ typedef struct {
   int pid;
   int burst_time;
   int remaining_time;
-  // int arrival_time;
+  int arrival_time;
   ProcessState state;
 } Process;
 
@@ -118,26 +119,31 @@ Process *dequeue(Queue *q) {
   return process;
 }
 
-void round_robin_scheduler(Queue *ready_queue) {
-  while (ready_queue->size > 0) {
-    Process *current_process = dequeue(ready_queue);
-    if (current_process->remaining_time > TIME_QUANTUM) {
-      current_process->state = RUNNING;
-      printf("Process %d is running for %d time units.\n", current_process->pid, TIME_QUANTUM);
-      current_process->remaining_time -= TIME_QUANTUM;
-      enqueue(ready_queue, current_process); // Re-enqueue the process for future execution
-    } else {
-      current_process->state = RUNNING;
-      printf("Process %d is running for %d time units.\n", current_process->pid, current_process->remaining_time);
-      current_process->remaining_time = 0;
-      printf("Process %d has terminated.\n", current_process->pid);
-    }
-    // Free memory only if the process has completed execution
-    if (current_process->remaining_time == 0) {
-      current_process->state = TERMINATED;
-      free(current_process); // Free memory allocated to the terminated process
-    }
+typedef struct {
+  PCB *queue[MAX_PROCESSES];
+  int front;
+  int rear;
+  int size;
+} PCB_Queue;
+void enqueue_PCB(PCB_Queue *q, PCB *pcb) {
+  if (q->size == MAX_PROCESSES) {
+    printf("Queue is full, cannot enqueue process.\n");
+    return;
   }
+  q->rear = (q->rear + 1) % MAX_PROCESSES;
+  q->queue[q->rear] = pcb;
+  q->size++;
+}
+
+PCB *dequeue_PCB(PCB_Queue *q) {
+  if (q->size == 0) {
+    printf("Queue is empty, cannot dequeue process.\n");
+    return NULL;
+  }
+  PCB *pcb = q->queue[q->front];
+  q->front = (q->front + 1) % MAX_PROCESSES;
+  q->size--;
+  return pcb;
 }
 
 
@@ -372,25 +378,25 @@ void allocate_memory(PCB *pcb, char *process_id, int size_needed, int lower_boun
   }
 }
 
-PCB *create_pcb(int process_id, int lower_bound, int upper_bound,int arrival_time) {
+Process *create_process(int processID,int arrival_time, int size) {
+  Process *process = (Process *)malloc(sizeof(Process));
+  process->pid = processID;
+  process->burst_time = size; // Assuming each instruction takes one time unit
+  process->remaining_time = process->burst_time;
+  process->state = READY;
+  process->arrival_time = arrival_time;
+  return process;
+}
+
+PCB *create_pcb(Process *process,int lowerBound, int upperBound) {
   // Allocate memory for a new PCB
   PCB *pcb = (PCB *)malloc(sizeof(PCB));
-  pcb->Pid = process_id;
+  pcb->Pid = process->pid;
   pcb->State = READY;
   pcb->PC = lower_bound + 8;  // Initialize PC to the start of the instructions
   pcb->memory_lower_bound = lower_bound;
   pcb->memory_upper_bound = upper_bound;
-  pcb->arrival_time = arrival_time; // Initialize arrival time
   return pcb;
-}
-
-Process *create_process(PCB *pcb) {
-  Process *process = (Process *)malloc(sizeof(Process));
-  process->pid = pcb->Pid;
-  process->burst_time = pcb->memory_upper_bound - pcb->memory_lower_bound + 1; // Assuming each instruction takes one time unit
-  process->remaining_time = process->burst_time;
-  process->state = READY;
-  return process;
 }
 
 // PCB *create_pcb(int process_id, int lower_bound, int upper_bound)
@@ -667,6 +673,126 @@ void free_program_lines(char **program, int num_lines)
   }
 }
 
+void round_robin_scheduler(Queue *ready_queue) {
+  while (ready_queue->size > 0) {
+    Process *current_process = dequeue(ready_queue);
+    if (current_process->remaining_time > TIME_QUANTUM) {
+      current_process->state = RUNNING;
+      printf("Process %d is running for %d time units.\n", current_process->pid, TIME_QUANTUM);
+      current_process->remaining_time -= TIME_QUANTUM;
+      enqueue(ready_queue, current_process); // Re-enqueue the process for future execution
+    } else {
+      current_process->state = RUNNING;
+      printf("Process %d is running for %d time units.\n", current_process->pid, current_process->remaining_time);
+      current_process->remaining_time = 0;
+      printf("Process %d has terminated.\n", current_process->pid);
+    }
+    // Free memory only if the process has completed execution
+    if (current_process->remaining_time == 0) {
+      current_process->state = TERMINATED;
+      free(current_process); // Free memory allocated to the terminated process
+    }
+  }
+  
+}
+
+// void round_robin(Queue *queue, int lower_bound, int upper_bound) {
+//   while (queue->size > 0) {
+//     clk++;  // Increment system clock
+//     Process *process = dequeue(queue);
+
+//     if (process == NULL || process->arrival_time > clk) {
+//       enqueue(queue, process);  // Requeue the process if it hasn't arrived yet
+//       continue;
+//     }
+
+//     process->state = RUNNING;
+//     PCB *pcb = create_pcb(process->pid, lower_bound, upper_bound, process->arrival_time);
+//     pcb->State = RUNNING;
+
+//     int time_spent = 0;
+//     while (time_spent < TIME_QUANTUM && process->remaining_time > 0) {
+//       int pc_val = PC_calc(lower_bound, pcb->PC);
+//       pcb->PC++;
+//       time_spent++;
+//       process->remaining_time--;
+//       int instr_index = pc_val - lower_bound;
+
+//       char* instr = get_value_from_memory_L_U("Instruction", instr_index, upper_bound);
+//       if (instr == NULL) {
+//         printf("Instruction not found in memory.\n");
+//         continue;
+//       }
+
+//       printf("CLK: %d | Process %d executing instruction: %s\n", CLK, process->pid, instr);
+
+//       if (strcmp(instr, "STORE X 5") == 0) {
+//         store_variable(lower_bound, "X", "5");
+//         printf("Stored X = 5 in memory.\n");
+//       } else if (strcmp(instr, "PRINT X") == 0) {
+//         char* value = get_value_from_memory("X");
+//         printf("X = %s\n", value);
+//         if (strcmp(value, "5") == 0) {
+//           process->state = TERMINATED;
+//           pcb->State = TERMINATED;
+//           deallocate_memory(lower_bound, upper_bound);
+//           printf("Memory deallocated for process %d\n", process->pid);
+//           free(pcb);
+//           break;
+//         }
+//       }
+
+//       if (process->remaining_time == 0) {
+//         process->state = TERMINATED;
+//         pcb->State = TERMINATED;
+//         deallocate_memory(lower_bound, upper_bound);
+//         printf("Memory deallocated for process %d\n", process->pid);
+//         free(pcb);
+//         break;
+//       }
+//     }
+
+//     if (process->state != TERMINATED) {
+//       process->state = READY;
+//       pcb->State = READY;
+//       enqueue(queue, process);
+//     } else {
+//       free(process);
+//     }
+//   }
+// }
+
+void execute_process(Queue *ready_queue, Queue *waiting_queue, Interpreter *interpreter) {
+  if (ready_queue->size > 0) {
+    Process *process = dequeue(ready_queue);
+    PCB *pcb = create_pcb(process, lower_bound, upper_bound);
+    int lower_bound = pcb->memory_lower_bound;
+    int upper_bound = pcb->memory_upper_bound;
+    int time_remaining = process->remaining_time;
+
+    for (int i = 0; i < TIME_QUANTUM && time_remaining > 0; i++) {
+      execute_instruction(pcb, lower_bound, upper_bound, interpreter);
+      time_remaining--;
+    }
+
+    if (time_remaining > 0) {
+      process->remaining_time = time_remaining;
+      pcb->State = READY;
+      process->state = READY;
+      update_memory_bounds(lower_bound, upper_bound, pcb);
+      enqueue(ready_queue, process);
+    } else {
+      pcb->State = TERMINATED;
+      process->state = TERMINATED;
+      deallocate_memory(lower_bound, upper_bound);
+      free(process);
+    }
+
+    free(pcb);
+  }
+}
+
+
 // int main() {
 //   Interpreter interpreter;
 //   mutex_init(&interpreter.user_input_mutex);
@@ -764,30 +890,135 @@ int main()
   ready_queue.rear = -1;
   ready_queue.size = 0;
 
+  Queue temp;
+  temp.front = 0;
+  temp.rear = -1;
+  temp.size = 0;
+
+  // for (int i = 0; i < 7;i++)
+  // {
+  //   printf("%s\n",program1[i]);
+  // }
   // Read program files
   int num_lines_program1 = read_program_file(program1_path, program1);
   int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
-
+  
   int num_lines_program2 = read_program_file(program2_path, program2);
   int size_needed2 = num_lines_program2 + 3 + 5;
 
   int num_lines_program3 = read_program_file(program3_path, program3);
   int size_needed3 = num_lines_program3 + 3 + 5;
 
+  // create_process();
+
   int burst_times[] = {num_lines_program1, num_lines_program2, num_lines_program3}; // Example burst times for processes
-  int arrival_times[] = {0, 3, 6};                                                   // Arrival times for processes (user input)
+  int arrival_times[] = {2, 0, 6};                                                   // Arrival times for processes (user input)
 
 
-  int clk = 0;
+  // int clk = 0;
+  int program1_arrival = 2;
+  int program2_arrival = 0;
+  int program3_arrival = 6;
+
+  Process *process1 = create_process(1,program1_arrival,size_needed1);
+  Process *process2 = create_process(2,program2_arrival,size_needed2);
+  Process *process3 = create_process(3,program3_arrival,size_needed3);
+  
+  int clk = 1;
   while (flag == 0)
   {
-    
+    if (clk == process1->arrival_time)
+    {
+      if (calculate_memory_bounds(size_needed1, &lower_bound1, &upper_bound1))
+      {
+        PCB *pcb1 = create_pcb(process1, lower_bound1, upper_bound1);
+        allocate_memory(pcb1, "1", size_needed1, lower_bound1, upper_bound1, program1);
+        enqueue(&temp,pcb1);
+        enqueue(&ready_queue, process3 );
+      }
+      else
+      {
+        printf("Failed to allocate memory for Program 1\n");
+      }
+    }
+    else if(clk == process2->arrival_time)
+    {
+      if (calculate_memory_bounds(size_needed2, &lower_bound2, &upper_bound2))
+      {
+        PCB *pcb2 = create_pcb(process2, lower_bound2, upper_bound2);
+        allocate_memory(pcb2, "2", size_needed2, lower_bound2, upper_bound2, program2);
+        enqueue(&temp,pcb2);
+        enqueue(&ready_queue, process2);
+      }
+      else
+      {
+        printf("Failed to allocate memory for Program 2\n");
+      }
+    }
+    else if(clk == process3->arrival_time)
+    {
+      if (calculate_memory_bounds(size_needed3, &lower_bound3, &upper_bound3))
+      {
+        PCB *pcb3 = create_pcb(process3, lower_bound3, upper_bound3);
+        allocate_memory(pcb3, "3", size_needed3, lower_bound3, upper_bound3, program3);
+        enqueue(&temp,pcb3);
+        enqueue(&ready_queue, process3);
+      }
+      else
+      {
+        printf("Failed to allocate memory for Program 2\n");
+      }
+    }
+
+    Process *Next;
+    if (temp.size > 0)
+    {
+      Next = dequeue(temp);
+    }
+
+
 
   }
 
+
+  // while (flag == 0)
+  // {
+  //   for (int i = 0; i < MAX_PROCESSES; i++)
+  //   {
+  //     if (program1_arrival < program2_arrival && program1_arrival < program3_arrival)
+  //     {
+  //       if (calculate_memory_bounds(size_needed1, &lower_bound1, &upper_bound1))
+  //       {
+  //         PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1,program1_arrival);
+  //         allocate_memory(pcb1, "1", size_needed1, lower_bound1, upper_bound1, program1);
+  //         enqueue(&ready_queue, create_process(pcb1));
+  //       }
+  //       else
+  //       {
+  //         printf("Failed to allocate memory for Program 1\n");
+  //       }
+  //     }
+  //     else if (program2_arrival < program1_arrival && program2_arrival < program3_arrival)
+  //     {
+  //       if (calculate_memory_bounds(size_needed1, &lower_bound2, &upper_bound2))
+  //       {
+  //         PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2,program2_arrival);
+  //         allocate_memory(pcb2, "2", size_needed2, lower_bound2, upper_bound2, program2);
+  //         enqueue(&ready_queue, create_process(pcb2));
+  //       }
+  //       else
+  //       {
+  //         printf("Failed to allocate memory for Program 1\n");
+  //       }
+  //     }
+      
+  //   }
+
+  // }
+
   // Main clock cycle
   // int current_time = 0;
-  // while (1)
+  // while (flag == 0)
   // {
   //   for (int i = 0; i < MAX_PROCESSES; i++)
   //   {
@@ -841,7 +1072,7 @@ int main()
   //   if (ready_queue.size > 0)
   //   {
   //     printf("Running processes at time %d.\n", current_time);
-  //     round_robin_scheduler(&ready_queue);
+  //     round_robin(&ready_queue);
   //   }
 
   //   // Increment time

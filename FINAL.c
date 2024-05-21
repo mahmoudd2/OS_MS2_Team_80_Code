@@ -1,39 +1,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h> 
+#include <pthread.h>
 
 #define MAX_LINES 1000
 #define MAX_LINE_LENGTH 1000
-#define MAX_PROCESS 1000
-#define MAX_QUEUE_SIZE 100
+#define MAX_PROCESSES 3
+// #define MAX_QUEUE_SIZE 100
 #define MAX_INSTRUCTIONS 8
 
+char *instructions[100];
+int PC = 0;
+int lower_bound;
+int upper_bound;
 // Define Mutex structure
-typedef struct {
+typedef struct
+{
   pthread_mutex_t mutex;
 } Mutex;
 
 // Mutex functions
-void mutex_init(Mutex *mutex) {
+void mutex_init(Mutex *mutex)
+{
   pthread_mutex_init(&mutex->mutex, NULL);
 }
 
-void mutex_lock(Mutex *mutex) {
+void mutex_lock(Mutex *mutex)
+{
   pthread_mutex_lock(&mutex->mutex);
 }
 
-void mutex_unlock(Mutex *mutex) {
+void mutex_unlock(Mutex *mutex)
+{
   pthread_mutex_unlock(&mutex->mutex);
 }
 
-
 // Define Interpreter structure
-typedef struct {
+typedef struct
+{
   Mutex user_input_mutex;
-  Mutex user_output_mutex; 
-  Mutex file_mutex
+  Mutex user_output_mutex;
+  Mutex file_mutex;
 } Interpreter;
+
 
 typedef enum
 {
@@ -44,36 +53,89 @@ typedef enum
   TERMINATED
 } ProcessState;
 
-typedef struct {
-    int Pid;
-    ProcessState State;
-    // int priority;
-    int PC;
-    int memory_lower_bound;
-    int memory_upper_bound;
+typedef struct
+{
+  int Pid;
+  ProcessState State;
+  // int priority;
+  int PC;
+  int memory_lower_bound;
+  int memory_upper_bound;
 } PCB;
 
 typedef struct
 {
-    char *Name;
-    char *Value;
-}MemoryWord; // name w data strings bsss
+  char *Name;
+  char *Value;
+} MemoryWord; // name w data strings bsss
 
-MemoryWord Mem[60];
-// ARRAY
+MemoryWord Memory[60];
 
-// typedef struct {
-//     PCB pcb;
-//     char instructions[MAX_INSTRUCTIONS][50];
-//     int instructionCount;
-// } Process;
+void initialize_memory()
+{
+  for (int i = 0; i < 60; i++)
+  {
+    Memory[i].Name = NULL;
+    Memory[i].Value = NULL;
+  }
+}
 
+typedef struct {
+  int pid;
+  int burst_time;
+  int remaining_time;
+  int arrival_time;
+  ProcessState state;
+} Process;
 
+typedef struct {
+  Process *queue[MAX_PROCESSES];
+  int front;
+  int rear;
+  int size;
+} Queue;
 
-// cell by cell el pcb
+void enqueue(Queue *q, Process *process) {
+  if (q->size == MAX_PROCESSES) {
+    printf("Queue is full, cannot enqueue process.\n");
+    return;
+  }
+  q->rear = (q->rear + 1) % MAX_PROCESSES;
+  q->queue[q->rear] = process;
+  q->size++;
+}
 
+Process *dequeue(Queue *q) {
+  if (q->size == 0) {
+    printf("Queue is empty, cannot dequeue process.\n");
+    return NULL;
+  }
+  Process *process = q->queue[q->front];
+  q->front = (q->front + 1) % MAX_PROCESSES;
+  q->size--;
+  return process;
+}
 
-// Process processes[MAX_PROCESS];
+Process *create_process(int processID,int arrival_time, int size) {
+  Process *process = (Process *)malloc(sizeof(Process));
+  process->pid = processID;
+  process->burst_time = size; // Assuming each instruction takes one time unit
+  process->remaining_time = process->burst_time;
+  process->state = READY;
+  process->arrival_time = arrival_time;
+  return process;
+}
+
+// typedef struct
+// {
+//   enum
+//   {
+//     zero,
+//     one
+//   } value;
+//   Queue queue;
+//   int ownerID;
+// } Mutex;
 
 // typedef struct
 // {
@@ -82,381 +144,613 @@ MemoryWord Mem[60];
 //   int rear;
 //   int size;
 // } Queue;
-
-
-// typedef enum {
-//     INSTRUCTION,
-//     VARIABLE,
-//     PCB_DATA
-// } MemoryType;
-
-// typedef struct {
-//     char var_name[20];
-//     char value[20];
-// } Variable;
-
-int allocate_memory(Memory *mem, int process_id, int num_instructions, int *lower_bound, int *upper_bound) {
-    int size_needed = num_instructions + 3 + 1; // Instructions + Variables + PCB
-    for (int i = 0; i <= 60 - size_needed; i++) {
-        int free_block = 1;
-        for (int j = 0; j < size_needed; j++) {
-            if (mem->Mem[i + j].type != INSTRUCTION || strcmp(mem->Mem[i + j].data.instruction, "") != 0) {
-                free_block = 0;
-                break;
-            }
-        }
-        if (free_block) {
-            *lower_bound = i;
-            *upper_bound = i + size_needed - 1;
-            for (int j = 0; j < size_needed; j++) {
-                mem->Mem[i + j].type = PCB_DATA;
-                mem->Mem[i + j].data.pcb.Pid = process_id;
-            }
-            return 1;
-        }
-    }
-    return 0;
-}
-
-void deallocate_memory(Memory *mem, int process_id) {
-    for (int i = 0; i < 60; i++) {
-        if (mem->Mem[i].type == PCB_DATA && mem->Mem[i].data.pcb.Pid == process_id) {
-            mem->Mem[i].type = INSTRUCTION;
-            strcpy(mem->Mem[i].data.instruction, "");
-        }
-    }
-}
-
-void print_memory(Memory *mem) {
-    for (int i = 0; i < 60; i++) {
-        if (mem->Mem[i].type == INSTRUCTION) {
-            printf("Memory[%d]: Instruction - %s\n", i, mem->Mem[i].data.instruction);
-        } else if (mem->Mem[i].type == VARIABLE) {
-            printf("Memory[%d]: Variable - %s = %s\n", i, mem->Mem[i].data.variable.var_name, mem->Mem[i].data.variable.value);
-        } else if (mem->Mem[i].type == PCB_DATA) {
-            printf("Memory[%d]: PCB - Process ID: %d\n", i, mem->Mem[i].data.pcb.Pid);
-        }
-    }
-}
-
-PCB* create_pcb(int process_id, int priority, int lower_bound, int upper_bound) {
-    PCB *pcb = (PCB *)malloc(sizeof(PCB));
-    pcb->Pid = process_id;
-    pcb->State = READY;
-    pcb->priority = priority;
-    pcb->PC = 0;
-    pcb->memory_lower_bound = lower_bound;
-    pcb->memory_upper_bound = upper_bound;
-    return pcb;
-}
-
-void store_pcb(Memory *memory, PCB *pcb) {
-    for (int i = pcb->memory_lower_bound; i <= pcb->memory_upper_bound; i++) {
-        memory->Mem[i].type = PCB_DATA;
-        memory->Mem[i].data.pcb = *pcb;
-    }
-}
-
-// queues:
-void init_queue(Queue *q)
+const char *process_state_to_string(ProcessState state)
 {
-  q->front = 0;
-  q->rear = -1;
-  q->size = 0;
-}
-
-int is_empty(Queue *q)
-{
-  return q->size == 0;
-}
-
-int is_full(Queue *q)
-{
-  return q->size == MAX_QUEUE_SIZE;
-}
-
-void enqueue(Queue *q, PCB *pcb)
-{
-  if (!is_full(q))
+  switch (state)
   {
-    q->rear = (q->rear + 1) % MAX_QUEUE_SIZE;
-    q->processes[q->rear] = pcb;
-    q->size++;
+  case NEW:
+    return "NEW";
+  case READY:
+    return "READY";
+  case RUNNING:
+    return "RUNNING";
+  case WAITING:
+    return "WAITING";
+  case TERMINATED:
+    return "TERMINATED";
+  default:
+    return "UNKNOWN";
   }
 }
 
-PCB *dequeue(Queue *q)
+int PC_calc (int lower_bound,int pc)
 {
-  if (!is_empty(q))
+  printf("lowerrr: %d\n\n",lower_bound);
+  int temp = pc + lower_bound + 8;
+  PC = temp;
+  return temp;
+}
+
+
+// int allocate_memory(PCB *pcb, char *process_id, int size_needed, int *lower_bound, int *upper_bound, char **program)
+// {
+//   for (int i = 0; i <= 60 - size_needed; i++)
+//   {
+//     int free_block = 1;
+//     for (int j = 0; j < size_needed; j++)
+//     {
+//       if (Memory[i + j].Name != NULL)
+//       {
+//         free_block = 0;
+//         break;
+//       }
+//     }
+//     if (free_block)
+//     {
+//       *lower_bound = i;
+//       *upper_bound = i + size_needed - 1;
+
+//       Memory[i].Name = strdup("Pid");
+//       Memory[i].Value = strdup(process_id);
+
+//       char pc_str[20];
+//       char lower_bound_str[20];
+//       char upper_bound_str[20];
+
+//       snprintf(lower_bound_str, sizeof(lower_bound_str), "%d", *lower_bound);
+//       snprintf(upper_bound_str, sizeof(upper_bound_str), "%d", *upper_bound);
+//       snprintf(pc_str, sizeof(pc_str), "%d", pcb->PC);
+
+//       Memory[i + 1].Name = strdup("State");
+//       Memory[i + 1].Value = strdup(process_state_to_string(pcb->State));
+
+//       Memory[i + 2].Name = strdup("PC");
+//       Memory[i + 2].Value = strdup(pc_str);
+
+//       Memory[i + 3].Name = strdup("memory_lower_bound");
+//       Memory[i + 3].Value = strdup(lower_bound_str);
+
+//       Memory[i + 4].Name = strdup("memory_upper_bound");
+//       Memory[i + 4].Value = strdup(upper_bound_str);
+
+//       for (int k = 0; k < 3; k++)
+//       {
+//         Memory[i + 5 + k].Name = NULL;
+//         Memory[i + 5 + k].Value = NULL;
+//       }
+//       int temp = 0;
+//       for (int r = 8; r < size_needed; r++)
+//       {
+//         Memory[r + i].Name = strdup("Instruction");
+//         Memory[r + i].Value = strdup(program[temp]);
+//         temp++;
+//       }
+//       // Update PCB with memory bounds
+//       pcb->memory_lower_bound = *lower_bound;
+//       pcb->memory_upper_bound = *upper_bound;
+//       return 1;
+//     }
+//   }
+//   return 0;
+// }
+void store_variable(int lower_bound, char *name, char *value) {
+  int var_bound = lower_bound + 8;  // Start from 8 as instructions start from 8.
+  int found = 0;
+
+  // First, check if the variable already exists and update its value.
+  for (int i = lower_bound + 5; i < var_bound; i++) {
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {
+      free(Memory[i].Value);  // Free the old value
+      Memory[i].Value = strdup(value);
+      found = 1;
+      break;
+    }
+  }
+
+  // If the variable was not found, find an empty slot and store the new variable.
+  if (!found) {
+    for (int i = lower_bound + 5; i < var_bound; i++) {
+      if (Memory[i].Value == NULL || strcmp(Memory[i].Value, "") == 0) {
+        if (Memory[i].Name != NULL) {
+          free(Memory[i].Name);
+        }
+        Memory[i].Name = strdup(name);
+        if (Memory[i].Value != NULL) {
+          free(Memory[i].Value);
+        }
+        Memory[i].Value = strdup(value);
+        return;
+      }
+    }
+  }
+
+  // If no empty slot is found, print an error message.
+  if (!found) {
+    printf("Memory is full, cannot store %s = %s\n", name, value);
+  }
+}
+
+
+void deallocate_memory(int lower_bound, int upper_bound)
+{
+  for (int i = lower_bound; i <= upper_bound; i++)
   {
-    PCB *pcb = q->processes[q->front];
-    q->front = (q->front + 1) % MAX_QUEUE_SIZE;
-    q->size--;
-    return pcb;
+    free(Memory[i].Name);
+    free(Memory[i].Value);
+    Memory[i].Name = NULL;
+    Memory[i].Value = NULL;
+  }
+}
+
+void print_memory()
+{
+  int instCount = 1;
+  int varCount = 1;
+  for (int i = 0; i < 60; i++)
+  {
+    if (Memory[i].Name != NULL && Memory[i].Value != NULL)
+    {
+      if (strcmp(Memory[i].Name, "Instruction") == 0)
+      {
+        printf("Memory[%d]: %s %d = %s\n", i, Memory[i].Name, instCount, Memory[i].Value);
+        instCount++;
+      }
+      else if (strcmp(Memory[i].Name, "Variable") == 0)
+      {
+        printf("Memory[%d]: %s %d = %s\n", i, Memory[i].Name, varCount, Memory[i].Value);
+        varCount++;
+      }
+      else
+      {
+        printf("Memory[%d]: %s = %s\n", i, Memory[i].Name, Memory[i].Value);
+      }
+    }
+    else if (Memory[i].Name != NULL)
+    {
+      printf("Memory[%d]: %s\n", i, Memory[i].Name);
+    }
+    else
+    {
+      printf("Memory[%d]: Empty\n", i);
+
+    }
+  }
+}
+
+int calculate_memory_bounds(int size_needed, int *lower_bound, int *upper_bound) {
+  for (int i = 0; i <= 60 - size_needed; i++) {
+    int free_block = 1;
+    for (int j = 0; j < size_needed; j++) {
+      if (Memory[i + j].Name != NULL) {
+        free_block = 0;
+        break;
+      }
+    }
+    if (free_block) {
+      *lower_bound = i;
+      *upper_bound = i + size_needed - 1;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+void allocate_memory(PCB *pcb, char *process_id, int size_needed, int lower_bound, int upper_bound, char **program) {
+  int i = lower_bound;
+
+  Memory[i].Name = strdup("Pid");
+  Memory[i].Value = strdup(process_id);
+
+  char pc_str[20];
+  char lower_bound_str[20];
+  char upper_bound_str[20];
+
+  snprintf(lower_bound_str, sizeof(lower_bound_str), "%d", lower_bound);
+  snprintf(upper_bound_str, sizeof(upper_bound_str), "%d", upper_bound);
+  snprintf(pc_str, sizeof(pc_str), "%d", pcb->PC);
+
+  Memory[i + 1].Name = strdup("State");
+  Memory[i + 1].Value = strdup(process_state_to_string(pcb->State));
+
+  Memory[i + 2].Name = strdup("PC");
+  Memory[i + 2].Value = strdup(pc_str);
+
+  Memory[i + 3].Name = strdup("memory_lower_bound");
+  Memory[i + 3].Value = strdup(lower_bound_str);
+
+  Memory[i + 4].Name = strdup("memory_upper_bound");
+  Memory[i + 4].Value = strdup(upper_bound_str);
+
+  for (int k = 0; k < 3; k++) {
+    Memory[i + 5 + k].Name = NULL;
+    Memory[i + 5 + k].Value = NULL;
+  }
+
+  int temp = 0;
+  for (int r = 8; r < size_needed; r++) {
+    Memory[r + i].Name = strdup("Instruction");
+    Memory[r + i].Value = strdup(program[temp]);
+    temp++;
+  }
+}
+
+PCB *create_pcb(int process_id, int lower_bound, int upper_bound) {
+  // Allocate memory for a new PCB
+  PCB *pcb = (PCB *)malloc(sizeof(PCB));
+  pcb->Pid = process_id;
+  pcb->State = READY;
+  pcb->PC = lower_bound + 8;  // Initialize PC to the start of the instructions
+  pcb->memory_lower_bound = lower_bound;
+  pcb->memory_upper_bound = upper_bound;
+  return pcb;
+}
+
+
+// PCB *create_pcb(int process_id, int lower_bound, int upper_bound)
+// {
+//   // allocates memory for a new PCB
+//   PCB *pcb = (PCB *)malloc(sizeof(PCB));
+//   pcb->Pid = process_id;
+//   pcb->State = READY;
+//   pcb->PC = PC_calc(lower_bound,PC);
+//   pcb->memory_lower_bound = lower_bound;
+//   pcb->memory_upper_bound = upper_bound;
+//   return pcb;
+// }
+
+// Function to get a value from memory by name
+char* get_value_from_memory(const char* name) {
+  for (int i = 0; i < 60; i++) {
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {
+      return Memory[i].Value;
+    }
+  }
+  return NULL;
+}
+
+char* get_value_from_memory_L_U(const char* name, int lower_bound, int upper_bound) {
+  for (int i = lower_bound; i <= upper_bound; i++) {
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {
+      return Memory[i].Value;
+    }
   }
   return NULL;
 }
 
 
+void printFromTo(char *start_num, char *end_num)
+{
+  int start = atoi(start_num);
+  int end = atoi(end_num);
+  printf("Printing From %d To %d\n",start,end);
 
-int read_program_file(const char *file_path, char **program) {
-  FILE *file = fopen(file_path, "r");
+  for (int i = start; i <= end ; i++)
+  {
+    printf("%d ",i);
+  }
+  printf("\n\n");
+}
+
+char* readFile(char *str, int lower_bound, int upper_bound) {
+  char *filename = get_value_from_memory_L_U(str, lower_bound, upper_bound);
+
+  if (filename == NULL) {
+    printf("Error: Filename not found in memory.\n");
+    return NULL;
+  }
+
+  FILE *file = fopen(filename, "r");
   if (file == NULL) {
+    printf("Error opening file\n");
+    return NULL;
+  }
+
+  fseek(file, 0, SEEK_END);
+  long file_size = ftell(file);
+  fseek(file, 0, SEEK_SET);
+
+  char *file_contents = (char *)malloc(file_size + 1);
+  if (file_contents == NULL) {
+    printf("Memory allocation failed\n");
+    fclose(file);
+    return NULL;
+  }
+
+  fread(file_contents, 1, file_size, file);
+  file_contents[file_size] = '\0';
+
+  fclose(file);
+
+  return file_contents;
+}
+
+// void semWaitB(Mutex *m, Process *process)
+// {
+//   if (m->value == one)
+//   {
+//     m->ownerID = process->pid;
+//     m->value = zero;
+//   }
+//   else
+//   {
+//     enqueue(&m->queue, process);
+//   }
+// }
+
+// void semSignalB(Mutex *m, Process *process)
+// {
+//   if (m->ownerID == process->pid)
+//   {
+//     if (is_empty(&m->queue))
+//     {
+//       m->value = one;
+//     }
+//     else
+//     {
+//       Process *processFin = dequeue(&m->queue);
+//       enqueue(&ready_queue, processFin);
+//       m->ownerID = processFin->pid;
+//     }
+//   }
+// }
+
+void writeFile(char *name, char *data,int lower_bound, int upper_bound) {
+  // Find the filename in memory
+  char *filename = NULL;
+  for (int i = lower_bound + 5; i < upper_bound; i++) {
+    if (Memory[i].Name != NULL && strcmp(Memory[i].Name, name) == 0) {   // leh kanet mktoba "a"
+      filename = Memory[i].Value;
+      break;
+    }
+  }
+
+  // If filename is not found, exit
+  if (filename == NULL) {
+    printf("Error: Filename not found in memory.\n");
+    return;
+  }
+
+  // Open file for writing ("w" mode)
+  FILE *file = fopen(filename, "w");
+  if (file == NULL) {
+    printf("Error opening file\n");
+    return;
+  }
+  
+  // Write data to file
+  if (fputs(data, file) == EOF) {
+    printf("Error writing to file\n");
+    fclose(file);
+    return;
+  }
+
+  // Close the file
+  if (fclose(file) != 0) {
+    printf("Error closing file\n");
+  }
+}
+
+void print (char *var_name)
+{
+  if (var_name != NULL)
+  {
+    char *value = get_value_from_memory(var_name);
+    printf("%s = %s\n",var_name,value);
+  }
+  else
+  {
+    printf("el print msh shgal");
+  }
+
+}
+
+
+
+void execute_line(MemoryWord *Mem, Interpreter *interpreter, int lower_bound,int upper_bound, int PC) {
+  if (Mem[PC].Value == NULL) {
+    fprintf(stderr, "Error: Null pointer encountered at PC %d\n", PC);
+    return;
+  }
+
+  // Create a writable copy of the line
+  char line[MAX_LINE_LENGTH];
+  strncpy(line, Mem[PC].Value, MAX_LINE_LENGTH - 1);
+  line[MAX_LINE_LENGTH - 1] = '\0';  // Ensure null-termination
+
+  char *token = strtok(line, " ");
+  if (token == NULL) {
+    fprintf(stderr, "Error: No token found in line\n");
+    return;
+  }
+
+  if (strcmp(token, "assign") == 0) {
+    char *var_name = strtok(NULL, " ");
+    char *value_type = strtok(NULL, " ");
+
+    if (var_name != NULL && value_type != NULL && strcmp(value_type, "input") == 0) {
+      char value[MAX_LINE_LENGTH];
+      printf("Enter your input for %s: ", var_name);
+      fgets(value, MAX_LINE_LENGTH, stdin);
+      if (value[strlen(value) - 1] == '\n') {
+        value[strlen(value) - 1] = '\0';
+      }
+      printf("Assigned %s = %s\n", var_name, value);
+      store_variable(lower_bound, var_name, value);
+    }
+    else if (strcmp(value_type, "readFile") == 0) 
+    {
+      char *file_var_name = strtok(NULL, " ");
+      printf("EL FILEEEE esmo: %s\n\n",file_var_name);
+
+      if (file_var_name != NULL) {
+        char *file_contents = readFile(file_var_name,lower_bound,upper_bound);
+        printf("EL FILEEEE: %s\n\n",file_contents);
+        if (file_contents != NULL) {
+          store_variable(lower_bound, var_name, file_contents);
+          free(file_contents); // Free the allocated memory for file contents
+        }
+      }
+    }
+    else{
+      fprintf(stderr, "Error: Insufficient arguments for assign command\n");
+    }
+  } else if (strcmp(token, "printFromTo") == 0) {
+    char *start_str = strtok(NULL, " ");
+    char *end_str = strtok(NULL, " ");
+    if (start_str != NULL && end_str != NULL) {
+      char *start_value = get_value_from_memory(start_str);
+      char *end_value = get_value_from_memory(end_str);
+      if (start_value != NULL && end_value != NULL) {
+        printFromTo(start_value, end_value);
+      } else {
+        fprintf(stderr, "Error: One or both variables not found in memory\n");
+      }
+    } else {
+      fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
+    }
+  } else if (strcmp(token, "print") == 0) {
+    char *var_name = strtok(NULL, " ");
+    if (var_name != NULL) {
+      print(var_name);
+    }
+  }
+  else if (strcmp(token, "writeFile") == 0)
+  {
+    char *fileName = strtok(NULL, " ");
+    char *value_str = strtok(NULL, " ");
+    if (fileName != NULL && value_str != NULL)
+    {
+      char *value = get_value_from_memory_L_U(value_str,lower_bound,upper_bound);
+      printf("VALUEEE:: %s\n", value);
+
+      if (fileName != NULL && value != NULL)
+      {
+        writeFile(fileName,value,lower_bound,upper_bound);
+      }
+    }
+    else {
+      fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
+    }
+  }
+  else if (strcmp(token, "readFile") == 0)
+  {
+    char *fileName = strtok(NULL, " ");
+    if (fileName != NULL)
+    {
+      char * temp = readFile(fileName,lower_bound,upper_bound);
+      printf("Readfile returns: %s\n\n",temp);
+    }
+  }
+  // else
+  // {
+  //   printf("mfesh haga\n");
+  // }
+}
+
+void execute_program(MemoryWord *Memory, Interpreter *interpreter, int lower_bound, int upper_bound,int pc)
+{
+  for (int i = pc; i < upper_bound; i++)
+  {
+    execute_line(Memory, interpreter, lower_bound,upper_bound,pc);
+    pc++;
+  }
+}
+
+int read_program_file(const char *file_path, char **program)
+{
+  FILE *file = fopen(file_path, "r");
+  if (file == NULL)
+  {
     fprintf(stderr, "Error: Unable to open file %s\n", file_path);
-    return -1; // Return -1 to indicate failure
+    return -1;
   }
 
   int num_lines = 0;
   char line[MAX_LINE_LENGTH];
-
-  // Read lines from file and store them in program array
-  while (fgets(line, MAX_LINE_LENGTH, file) != NULL && num_lines < MAX_LINES) {
-    // Remove newline character if present
-    if (line[strlen(line) - 1] == '\n') {
+  while (fgets(line, MAX_LINE_LENGTH, file) != NULL && num_lines < MAX_LINES)
+  {
+    if (line[strlen(line) - 1] == '\n')
+    {
       line[strlen(line) - 1] = '\0';
     }
-    // Allocate memory for line and copy it to program array
     program[num_lines] = strdup(line);
+    instructions[num_lines] = program[num_lines];
     num_lines++;
-  }
-
+  } 
+  printf(" program is read\n");
   fclose(file);
-//   printf("%d",num_lines);
-  return num_lines; // Return number of lines read
+  return num_lines;
 }
 
-void free_program_lines(char **program, int num_lines) {
-  // Free memory allocated for program lines
-  for (int i = 0; i < num_lines; i++) {
+void free_program_lines(char **program, int num_lines)
+{
+  for (int i = 0; i < num_lines; i++)
+  {
     free(program[i]);
   }
 }
 
-void execute_line(char *line, Interpreter *interpreter, Memory *memory) {
-    if (line == NULL) {
-        // Handle null pointer error
-        fprintf(stderr, "Error: Null pointer encountered\n");
-        return;
-    }
-
-    char *token = strtok(line, " ");
-    if (token == NULL) {
-        // Handle error if no token found
-        fprintf(stderr, "Error: No token found in line\n");
-        return;
-    }
-
-    if (strcmp(token, "assign") == 0) {
-        // Handle assign command
-        char *var_name = strtok(NULL, " ");
-        char value[MAX_LINE_LENGTH];
-        if (var_name != NULL) {
-            assign(var_name, value, interpreter, memory);
-        } else {
-            fprintf(stderr, "Error: Insufficient arguments for assign command\n");
-        }
-    } else if (strcmp(token, "mutexLock") == 0) {
-        // Handle mutexLock command
-        char *resource = strtok(NULL, " ");
-        if (resource != NULL) {
-            if (strcmp(resource, "userInput") == 0) {
-                mutex_lock(&interpreter->user_input_mutex);
-            }
-        }
-    } else if (strcmp(token, "printFromTo") == 0) {
-        // Handle printFromTo command
-        char *start_str = strtok(NULL, " ");
-        char *end_str = strtok(NULL, " ");
-        if (start_str != NULL && end_str != NULL) {
-            int start = atoi(start_str);
-            int end = atoi(end_str);
-            print_from_to(start, end, memory);
-        } else {
-            fprintf(stderr, "Error: Insufficient arguments for printFromTo command\n");
-        }
-    }
-}
-
-
-void execute_program(char **program, int num_lines, Interpreter *interpreter,Memory *memory) {
-    for (int i = 0; i < num_lines; i++) {
-        execute_line(program[i], interpreter,memory);
-    }
-}
-
-void assign(char *x, char *y, Interpreter *interpreter, Memory *memory) {
-    // Read input from the user
-    printf("Enter your input for %s: ", x);
-    fgets(y, MAX_LINE_LENGTH, stdin);
-
-    // Remove trailing newline character
-    if (y[strlen(y) - 1] == '\n') {
-        y[strlen(y) - 1] = '\0';
-    }
-
-    printf("Assigned %s = %s\n", x, y);
-
-    // Store the assigned value in memory
-    for (int i = 0; i < 60; i++) {
-        if (memory->Mem[i].type == VARIABLE && strcmp(memory->Mem[i].data.variable.var_name, x) == 0) {
-            // Variable already exists in memory, update its value
-            strcpy(memory->Mem[i].data.variable.value, y);
-            return; // Exit the function
-        }
-    }
-    // If the variable doesn't exist in memory, find the first available slot and store it
-    for (int i = 0; i < 60; i++) {
-        if (memory->Mem[i].type == INSTRUCTION) {
-            memory->Mem[i].type = VARIABLE;
-            strcpy(memory->Mem[i].data.variable.var_name, x);
-            strcpy(memory->Mem[i].data.variable.value, y);
-            return; // Exit the function
-        }
-    }
-    printf("Memory is full, cannot store %s = %s\n", x, y);
-}
-
-
-void print_from_to(int start, int end, Memory *memory) {
-    if (start < 0 || start >= 60 || end < 0 || end >= 60) {
-        fprintf(stderr, "Error: Invalid range\n");
-        return;
-    }
-
-    for (int num = start; num <= end; num++) {
-        if (memory->Mem[num].type == VARIABLE) {
-            printf("%s = %s\n\n", memory->Mem[num].data.variable.var_name, memory->Mem[num].data.variable.value);
-        } else if (memory->Mem[num].type == INSTRUCTION) {
-            printf("Instruction at memory index %d: %s\n", num, memory->Mem[num].data.instruction);
-        } else if (memory->Mem[num].type == PCB_DATA) {
-            printf("PCB data at memory index %d: Process ID - %d\n", num, memory->Mem[num].data.pcb.Pid);
-        } else {
-            printf("Unknown type at memory index %d\n", num);
-        }
-    }
-}
-
-void writeFile(Interpreter *interpreter, const char *filename, const char *data) {
-    mutex_lock(&interpreter->file_mutex);
-    FILE *file = fopen(filename, "w");
-    if (file == NULL) {
-        fprintf(stderr, "Error: Unable to create file %s\n", filename);
-        mutex_unlock(&interpreter->file_mutex);
-        return;
-    }
-    fprintf(file, "%s", data);
-    fclose(file);
-    printf("Data written to file %s: %s\n", filename, data);
-    mutex_unlock(&interpreter->file_mutex);
-}
-
-void readFile(Interpreter *interpreter, const char *filename) {
-    mutex_lock(&interpreter->file_mutex);
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        fprintf(stderr, "Error: Unable to open file %s\n", filename);
-        mutex_unlock(&interpreter->file_mutex);
-        return;
-    }
-    char line[MAX_LINE_LENGTH];
-    while (fgets(line, sizeof(line), file) != NULL) {
-        printf("%s", line);
-    }
-    fclose(file);
-    printf("Data read from file %s\n", filename);
-    mutex_unlock(&interpreter->file_mutex);
-}
-
-Process* create_process(int process_id, int priority, char **instructions, int instruction_count, Memory *memory) {
-    int lower_bound, upper_bound;
-    int size_needed = instruction_count + 3 + 1; // Instructions + Variables + PCB
-
-    if (!allocate_memory(memory, process_id, instruction_count, &lower_bound, &upper_bound)) {
-        printf("Failed to allocate memory for Process %d\n", process_id);
-        return NULL;
-    }
-
-    Process *process = (Process *)malloc(sizeof(Process));
-    process->pcb.Pid = process_id;
-    process->pcb.State = NEW;
-    process->pcb.priority = priority;
-    process->pcb.PC = 0;
-    process->pcb.memory_lower_bound = lower_bound;
-    process->pcb.memory_upper_bound = upper_bound;
-
-    for (int i = 0; i < instruction_count; i++) {
-        strcpy(process->instructions[i], instructions[i]);
-    }
-    process->instructionCount = instruction_count;
-
-    store_pcb(memory, &process->pcb);
-
-    return process;
-}
-
-void allocate_and_create_process(Memory *memory, int process_id, int priority, char **instructions, int instruction_count) {
-    int lower_bound, upper_bound;
-    
-    if (allocate_memory(memory, process_id, instruction_count, &lower_bound, &upper_bound)) {
-        printf("Process %d allocated memory from %d to %d\n", process_id, lower_bound, upper_bound);
-        PCB *pcb = create_pcb(process_id, priority, lower_bound, upper_bound);
-        store_pcb(memory, pcb);
-        
-        Process *process = create_process(process_id, priority, instructions, instruction_count, memory);
-        if (process != NULL) {
-            processes[process_id] = *process;
-        } else {
-            printf("Failed to create Process %d\n", process_id);
-        }
-    } else {
-        printf("Failed to allocate memory for Process %d\n", process_id);
-    }
-}
-
-
 int main() {
+  Interpreter interpreter;
+  mutex_init(&interpreter.user_input_mutex);
+  mutex_init(&interpreter.user_output_mutex);
+  mutex_init(&interpreter.file_mutex);
 
-    // Initialize interpreter
-    Interpreter interpreter;
-    mutex_init(&interpreter.user_input_mutex);
-    mutex_init(&interpreter.user_output_mutex);
+  initialize_memory();
 
-    // File paths for program files
-    char *program1_path = "program1.txt";
-    char *program2_path = "program2.txt";
-    char *program3_path = "program3.txt";
+  char *program1_path = "program1.txt";
+  char *program2_path = "program2.txt";
+  char *program3_path = "program3.txt";
 
-    // Read program files
-    char *program1[MAX_LINES];
-    char *program2[MAX_LINES];
-    char *program3[MAX_LINES];
-    
-    int num_lines_program1 = read_program_file(program1_path, program1);
-    int num_lines_program2 = read_program_file(program2_path, program2);
-    int num_lines_program3 = read_program_file(program3_path, program3);
+  char *program1[MAX_LINES];
+  char *program2[MAX_LINES];
+  char *program3[MAX_LINES];
 
-    Memory *memory = create_memory();
+  int lower_bound1 = 0, upper_bound1 = 0;
+  int lower_bound2, upper_bound2;
+  int lower_bound3, upper_bound3;
 
-    // Example process with the read instructions
-    // Execute program 1
-    execute_program(program1, num_lines_program1, &interpreter, memory);
-    allocate_and_create_process(memory, 1, 1, program1, num_lines_program1);
+  int num_lines_program1 = read_program_file(program1_path, program1);
+  int size_needed1 = num_lines_program1 + 3 + 5; // Lines + 3 variables + 5 PCB attributes
 
-    // Execute program 2
-    execute_program(program2, num_lines_program2, &interpreter, memory);
-    allocate_and_create_process(memory, 2, 1, program2, num_lines_program2);
+  if (calculate_memory_bounds(size_needed1, &lower_bound1, &upper_bound1)) {
+    PCB *pcb1 = create_pcb(1, lower_bound1, upper_bound1);
+    allocate_memory(pcb1, "1", size_needed1, lower_bound1, upper_bound1, program1);
+    execute_program(Memory, &interpreter, lower_bound1, upper_bound1, pcb1->PC);
+    free(pcb1);
+  } else {
+    printf("Failed to allocate memory for Program 1\n");
+  }
 
-    // Execute program 3
-    execute_program(program3, num_lines_program3, &interpreter, memory);
-    allocate_and_create_process(memory, 3, 1, program3, num_lines_program3);
+  int num_lines_program2 = read_program_file(program2_path, program2);
+  int size_needed2 = num_lines_program2 + 3 + 5;
 
-    print_memory(memory);
+  if (calculate_memory_bounds(size_needed2, &lower_bound2, &upper_bound2)) {
+    PCB *pcb2 = create_pcb(2, lower_bound2, upper_bound2);
+    allocate_memory(pcb2, "2", size_needed2, lower_bound2, upper_bound2, program2);
+    execute_program(Memory, &interpreter, lower_bound2, upper_bound2, pcb2->PC);
+    free(pcb2);
+  } else {
+    printf("Failed to allocate memory for Program 2\n");
+  }
 
-    
+  int num_lines_program3 = read_program_file(program3_path, program3);
+  int size_needed3 = num_lines_program3 + 3 + 5;
 
-    free_program_lines(program1, num_lines_program1);
-    // free_program_lines(program2, num_lines_program2);
-    // free_program_lines(program3, num_lines_program3);
+  if (calculate_memory_bounds(size_needed3, &lower_bound3, &upper_bound3)) {
+    PCB *pcb3 = create_pcb(3, lower_bound3, upper_bound3);
+    allocate_memory(pcb3, "3", size_needed3, lower_bound3, upper_bound3, program3);
+    execute_program(Memory, &interpreter, lower_bound3, upper_bound3, pcb3->PC);
+    free(pcb3);
+  } else {
+    printf("Failed to allocate memory for Program 3\n");
+  }
 
-    return 0;
+  print_memory();
+  return 0;
 }
+
+
+
+//print w printfromto w assign w writefile shagalen fol 
+// na2es at2kd mn read file w a3ml semwait w semsignal
